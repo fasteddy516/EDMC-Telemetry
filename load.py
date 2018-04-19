@@ -28,7 +28,15 @@ DEFAULT_BROKER_PORT = 1883
 DEFAULT_BROKER_KEEPALIVE = 60
 DEFAULT_BROKER_QOS = 0
 DEFAULT_DASHBOARD_FORMAT = 'raw'
+DEFAULT_FLAG_FORMAT = 'combined'
+DEFAULT_PIP_FORMAT = 'combined'
 DEFAULT_DASHBOARD_FILTER = {'Flags': 1, 'Pips': 0, 'FireGroup': 0, 'GuiFocus': 0, 'Latitude': 0, 'Longitude': 0, 'Heading': 0, 'Altitude': 0}
+
+STATUS_FLAG = ['Docked', 'Landed', 'LandingGear', 'Shields', 'Supercruise', 'FlightAssistOff', 'Hardpoints', 'InWing',
+    'Lights', 'CargoScoop', 'SilentRunning', 'Scooping', 'SrvHandbrake', 'SrvTurret', 'SrcUnderShip', 'SrvDriveAssist',
+    'FsdMassLocked', 'FsdCharging', 'FsdCooldown', 'LowFuel', 'OverHeating', 'HasLatLong', 'IsInDanger', 'BeingInterdicted',
+    'InMainShip', 'InFighter', 'InSrv', 'Bit27', 'Bit28', 'Bit29', 'Bit30', 'Bit31']
+
 this = sys.modules[__name__] # for holding globals
 
 # Plugin startup
@@ -45,8 +53,9 @@ def plugin_stop():
 
 def plugin_app(parent):
     label = tk.Label(parent, text="Telemetry")
-    return (label)
-
+    this.status = tk.Label(parent, anchor=tk.W, text="Offline", state=tk.DISABLED)
+    return (label, this.status)
+    
 
 def plugin_prefs(parent):
     frame = nb.Frame(parent)
@@ -84,24 +93,32 @@ def plugin_prefs(parent):
     this.dashboardFormat_button.configure(width = 15)
     this.dashboardFormat_button.grid(padx=PADX, pady=PADY, row=17, column=1, sticky=tk.W)
 
-    #DEFAULT_DASHBOARD_FILTER = {'Flags': 1, 'Pips': 0, 'FireGroup': 0, 'GuiFocus': 0, 'Latitude': 0, 'Longitude': 0, 'Heading': 0, 'Altitude': 0}
+    this.dashboardFilter_firegroup_check = nb.Checkbutton(frame, text="FireGroup", variable=this.dashboardFilter['FireGroup'], command=prefStateChange)
+    this.dashboardFilter_firegroup_check.grid(padx=PADX, row=17, column=2, sticky=tk.W)
+    
+    this.dashboardFilter_guifocus_check = nb.Checkbutton(frame, text="GuiFocus", variable=this.dashboardFilter['GuiFocus'], command=prefStateChange)
+    this.dashboardFilter_guifocus_check.grid(padx=PADX, row=17, column=3, sticky=tk.W)
+
     this.dashboardFilter_flags_check = nb.Checkbutton(frame, text="Flags", variable=this.dashboardFilter['Flags'], command=prefStateChange)
     this.dashboardFilter_flags_check.grid(padx=PADX, row=18, sticky=tk.W)
     
-    this.dashboardFilter_pips_check = nb.Checkbutton(frame, text="Pips", variable=this.dashboardFilter['Pips'], command=prefStateChange)
-    this.dashboardFilter_pips_check.grid(padx=PADX, row=18, column=1, sticky=tk.W)
-    
-    this.dashboardFilter_firegroup_check = nb.Checkbutton(frame, text="FireGroup", variable=this.dashboardFilter['FireGroup'], command=prefStateChange)
-    this.dashboardFilter_firegroup_check.grid(padx=PADX, row=18, column=2, sticky=tk.W)
-    
-    this.dashboardFilter_guifocus_check = nb.Checkbutton(frame, text="GuiFocus", variable=this.dashboardFilter['GuiFocus'], command=prefStateChange)
-    this.dashboardFilter_guifocus_check.grid(padx=PADX, row=18, column=3, sticky=tk.W)
+    this.dashboardFlagFormat_button = nb.OptionMenu(frame, this.cfg_dashboardFlagFormat, this.cfg_dashboardFlagFormat.get(), 'combined', 'discrete')
+    this.dashboardFlagFormat_button.configure(width = 15)
+    this.dashboardFlagFormat_button.grid(padx=PADX, pady=PADY, row=18, column=1, sticky=tk.W)
 
     this.dashboardFilter_latitude_check = nb.Checkbutton(frame, text="Latitude", variable=this.dashboardFilter['Latitude'], command=prefStateChange)
-    this.dashboardFilter_latitude_check.grid(padx=PADX, row=19, sticky=tk.W)
+    this.dashboardFilter_latitude_check.grid(padx=PADX, row=18, column=2, sticky=tk.W)
     
     this.dashboardFilter_longitude_check = nb.Checkbutton(frame, text="Longitude", variable=this.dashboardFilter['Longitude'], command=prefStateChange)
-    this.dashboardFilter_longitude_check.grid(padx=PADX, row=19, column=1, sticky=tk.W)
+    this.dashboardFilter_longitude_check.grid(padx=PADX, row=18, column=3, sticky=tk.W)
+    
+    
+    this.dashboardFilter_pips_check = nb.Checkbutton(frame, text="Pips", variable=this.dashboardFilter['Pips'], command=prefStateChange)
+    this.dashboardFilter_pips_check.grid(padx=PADX, row=19, sticky=tk.W)
+    
+    this.dashboardPipFormat_button = nb.OptionMenu(frame, this.cfg_dashboardPipFormat, this.cfg_dashboardPipFormat.get(), 'combined', 'discrete')
+    this.dashboardPipFormat_button.configure(width = 15)
+    this.dashboardPipFormat_button.grid(padx=PADX, pady=PADY, row=19, column=1, sticky=tk.W)
     
     this.dashboardFilter_heading_check = nb.Checkbutton(frame, text="Heading", variable=this.dashboardFilter['Heading'], command=prefStateChange)
     this.dashboardFilter_heading_check.grid(padx=PADX, row=19, column=2, sticky=tk.W)
@@ -125,8 +142,9 @@ def prefStateChange(format='processed'):
     if format == 'raw':
         this.currentStatus = {}
 
-    this.dashboardFilter_flags_check['state'] = this.dashboardFilter_pips_check['state'] = this.dashboardFilter_firegroup_check['state'] = this.dashboardFilter_guifocus_check['state'] = (this.cfg_dashboardFormat.get() == 'processed') and tk.NORMAL or tk.DISABLED
-    this.dashboardFilter_latitude_check['state'] = this.dashboardFilter_longitude_check['state'] = this.dashboardFilter_heading_check['state'] = this.dashboardFilter_altitude_check['state'] = (this.cfg_dashboardFormat.get() == 'processed') and tk.NORMAL or tk.DISABLED
+    this.dashboardFlagFormat_button['state'] = this.dashboardFilter_flags_check['state'] = this.dashboardFilter_pips_check['state'] = this.dashboardFilter_firegroup_check['state'] = this.dashboardFilter_guifocus_check['state'] = (this.cfg_dashboardFormat.get() == 'processed') and tk.NORMAL or tk.DISABLED
+    this.dashboardPipFormat_button['state'] = this.dashboardFilter_latitude_check['state'] = this.dashboardFilter_longitude_check['state'] = this.dashboardFilter_heading_check['state'] = this.dashboardFilter_altitude_check['state'] = (this.cfg_dashboardFormat.get() == 'processed') and tk.NORMAL or tk.DISABLED
+
 
 
 def prefs_changed():
@@ -137,6 +155,8 @@ def prefs_changed():
     config.set("Telemetry-BrokerKeepalive", this.cfg_brokerKeepalive.get())
     config.set("Telemetry-BrokerQoS", this.cfg_brokerQoS.get())
     config.set("Telemetry-DashboardFormat", this.cfg_dashboardFormat.get())
+    config.set("Telemetry-DashboardFlagFormat", this.cfg_dashboardFlagFormat.get())
+    config.set("Telemetry-DashboardPipFormat", this.cfg_dashboardPipFormat.get())
 
     df = {}
     for key in this.dashboardFilter:
@@ -166,9 +186,23 @@ def dashboard_entry(cmdr, is_beta, entry):
         
             # publish any updated data that has been requested via configuration options
             if this.dashboardFilter.has_key(key) and this.dashboardFilter[key].get() == 1 and (not this.currentStatus.has_key(key) or this.currentStatus[key] != entry[key]):
+                if key == 'Flags' and this.cfg_dashboardFlagFormat.get() == 'discrete':
+                    if not this.currentStatus.has_key(key):
+                        oldFlags = ~entry[key] & 0x07FFFFFF
+                    else:
+                        oldFlags = this.currentStatus[key]
+                    newFlags = entry[key]
+                    for bit in xrange(32):
+                        mask = 1 << bit
+                        if (oldFlags ^ newFlags) & mask:
+                            telemetry.publish("edmc/dashboard/Flags/" + STATUS_FLAG[bit], payload=(newFlags & mask) and 1, qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()        
+                elif key == 'Pips' and this.cfg_dashboardPipFormat.get() == 'discrete':
+                    telemetry.publish("edmc/dashboard/Pips/sys", payload=str(entry[key][0]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
+                    telemetry.publish("edmc/dashboard/Pips/eng", payload=str(entry[key][1]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
+                    telemetry.publish("edmc/dashboard/Pips/wep", payload=str(entry[key][2]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()                    
+                else:                
+                    telemetry.publish("edmc/dashboard/" + str(key), payload=str(entry[key]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
                 this.currentStatus[key] = entry[key]
-                print "> " + key + ": " + str(entry[key])
-                telemetry.publish("edmc/dashboard/" + str(key), payload=str(entry[key]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
 
 
 def loadConfiguration():
@@ -187,6 +221,12 @@ def loadConfiguration():
     this.cfg_dashboardFormat = tk.StringVar(value=config.get("Telemetry-DashboardFormat"))
     if not cfg_dashboardFormat.get():
         cfg_dashboardFormat.set(DEFAULT_DASHBOARD_FORMAT)
+    this.cfg_dashboardFlagFormat = tk.StringVar(value=config.get("Telemetry-DashboardFlagFormat"))
+    if not cfg_dashboardFlagFormat.get():
+        cfg_dashboardFlagFormat.set(DEFAULT_FLAG_FORMAT)
+    this.cfg_dashboardPipFormat = tk.StringVar(value=config.get("Telemetry-DashboardPipFormat"))
+    if not cfg_dashboardPipFormat.get():
+        cfg_dashboardPipFormat.set(DEFAULT_PIP_FORMAT)
     this.cfg_dashboardFilter = tk.StringVar(value=config.get("Telemetry-DashboardFilter"))
     if not cfg_dashboardFilter.get():
         cfg_dashboardFilter.set(json.dumps(DEFAULT_DASHBOARD_FILTER))
@@ -196,9 +236,13 @@ def loadConfiguration():
 
 
 def telemetryCallback_on_connect(client, userdata, flags, rc):
+    this.status['text'] = 'Connected'
+    this.status['state'] = tk.NORMAL
     print("Connected with result code "+str(rc))
 
 def telemetryCallback_on_disconnect(client, userdata, rc):
+    this.status['text'] = 'Offline'
+    this.status['state'] = tk.DISABLED
     print("Disconnected with result code "+str(rc))
 
 def telemetryCallback_on_message(client, userdata, msg):
@@ -209,6 +253,7 @@ def telemetryCallback_on_publish(client, userdata, mid):
 
 def initializeTelemetry():
     this.currentStatus = {}
+    #this.currentStatus['Flags'] = 0
     this.telemetry = mqtt.Client(TELEMETRY_CLIENTID)
     telemetry.on_connect = telemetryCallback_on_connect
     telemetry.on_disconnect = telemetryCallback_on_disconnect
