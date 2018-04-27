@@ -9,7 +9,6 @@
 # Uses the MQTT protocol (http://mqtt.org/) and Eclipse Paho MQTT Python Client (https://github.com/eclipse/paho.mqtt.python)
 
 '''
-- add ability to set topics for discrete pips (put it on the dashboard settings tab)
 - add individual flag filtering and topic naming (requires its own settings notebook tab)
 - journal processing - right now there is literally none
 
@@ -48,6 +47,9 @@ DEFAULT_FLAG_STATUS_TOPICS = ['Docked', 'Landed', 'LandingGear', 'Shields', 'Sup
     'InMainShip', 'InFighter', 'InSrv', 'Bit27', 'Bit28', 'Bit29', 'Bit30', 'Bit31']
 DEFAULT_PIP_FORMAT = 'combined'
 DEFAULT_PIP_TOPIC = 'pips'
+DEFAULT_PIP_SYS_TOPIC = 'sys'
+DEFAULT_PIP_ENG_TOPIC = 'eng'
+DEFAULT_PIP_WEP_TOPIC = 'wep'
 
 DEFAULT_JOURNAL_FORMAT = 'raw'
 DEFAULT_JOURNAL_TOPIC = 'journal'
@@ -136,14 +138,27 @@ def plugin_prefs(parent):
     nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Longitude']).grid(padx=PADX, row=3, column=3, sticky=tk.W)
 
     nb.Label(tnbDbStatus, text="Pip Format").grid(padx=PADX, row=4, sticky=tk.W)
-    nb.OptionMenu(tnbDbStatus, this.cfg_dashboardPipFormat, this.cfg_dashboardPipFormat.get(), 'combined', 'discrete').grid(padx=PADX, row=4, column=1, sticky=tk.W)
+    dbPipOptions = ['combined', 'discrete']
+    nb.OptionMenu(tnbDbStatus, this.cfg_dashboardPipFormat, this.cfg_dashboardPipFormat.get(), *dbPipOptions, command=prefStateChange).grid(padx=PADX, row=4, column=1, sticky=tk.W)
     nb.Checkbutton(tnbDbStatus, text="Heading", variable=this.cfg_dashboardFilters['Heading'], command=prefStateChange).grid(padx=PADX, row=4, column=2, sticky=tk.W)
     nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Heading']).grid(padx=PADX, row=4, column=3, sticky=tk.W)
     
-    nb.Checkbutton(tnbDbStatus, text="FireGroup", variable=this.cfg_dashboardFilters['FireGroup'], command=prefStateChange).grid(padx=PADX, row=5, sticky=tk.W)
-    nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['FireGroup']).grid(padx=PADX, row=5, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbDbStatus, text="Altitude", variable=this.cfg_dashboardFilters['Altitude'], command=prefStateChange).grid(padx=PADX, row=5, column=2, sticky=tk.W)
-    nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Altitude']).grid(padx=PADX, row=5, column=3, sticky=tk.W)
+    nb.Checkbutton(tnbDbStatus, text="FireGroup", variable=this.cfg_dashboardFilters['FireGroup'], command=prefStateChange).grid(padx=PADX, pady=(0,8), row=5, sticky=tk.W)
+    nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['FireGroup']).grid(padx=PADX, pady=(0,8), row=5, column=1, sticky=tk.W)
+    nb.Checkbutton(tnbDbStatus, text="Altitude", variable=this.cfg_dashboardFilters['Altitude'], command=prefStateChange).grid(padx=PADX, pady=(0,8), row=5, column=2, sticky=tk.W)
+    nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Altitude']).grid(padx=PADX, pady=(0,8), row=5, column=3, sticky=tk.W)
+
+    this.tnbDbPips = tk.LabelFrame(tnbDashboard, text='Pip Topics', bg=nb.Label().cget('background'))
+    tnbDbPips.grid(padx=PADX, pady=(8,0), row=6, column=0, columnspan=4, sticky=tk.NSEW)
+    tnbDbPips.columnconfigure(1, weight=1)
+
+    nb.Label(tnbDbPips, text="Sys").grid(padx=PADX, pady=(0,8), row=1, sticky=tk.W)
+    nb.Entry(tnbDbPips, textvariable=this.cfg_dashboardPipSysTopic).grid(padx=PADX, pady=(0,8), row=1, column=1, sticky=tk.W)
+    nb.Label(tnbDbPips, text="Eng").grid(padx=PADX, pady=(0,8), row=1, column=2, sticky=tk.W)
+    nb.Entry(tnbDbPips, textvariable=this.cfg_dashboardPipEngTopic).grid(padx=PADX, pady=(0,8), row=1, column=3, sticky=tk.W)
+    nb.Label(tnbDbPips, text="Wep").grid(padx=PADX, pady=(0,8), row=1, column=4, sticky=tk.W)
+    nb.Entry(tnbDbPips, textvariable=this.cfg_dashboardPipWepTopic).grid(padx=PADX, pady=(0,8), row=1, column=5, sticky=tk.W)
+
 
     # telemetry settings tab for journal entry items    
     tnbJournal = nb.Frame(tnb)
@@ -171,8 +186,11 @@ def prefStateChange(format='processed'):
         this.currentStatus = {}
 
     newState = (this.cfg_dashboardFormat.get() == 'processed') and tk.NORMAL or tk.DISABLED
-
     for element in this.tnbDbStatus.winfo_children():
+        element['state'] = newState
+
+    newState = (this.cfg_dashboardPipFormat.get() == 'discrete') and tk.NORMAL or tk.DISABLED
+    for element in this.tnbDbPips.winfo_children():
         element['state'] = newState
 
 
@@ -199,6 +217,9 @@ def prefs_changed():
     # dashboard - pips
     config.set("Telemetry-DashboardPipFormat", this.cfg_dashboardPipFormat.get())
     config.set("Telemetry-DashboardPipTopic", this.cfg_dashboardPipTopic.get())
+    config.set("Telemetry-DashboardPipSysTopic", this.cfg_dashboardPipSysTopic.get())    
+    config.set("Telemetry-DashboardPipEngTopic", this.cfg_dashboardPipEngTopic.get())    
+    config.set("Telemetry-DashboardPipWepTopic", this.cfg_dashboardPipWepTopic.get())    
 
     stopTelemetry()
     startTelemetry()
@@ -258,7 +279,15 @@ def loadConfiguration():
     this.cfg_dashboardPipTopic = tk.StringVar(value=config.get("Telemetry-DashboardPipTopic"))
     if not cfg_dashboardPipTopic.get():
         cfg_dashboardPipTopic.set(DEFAULT_PIP_TOPIC)
-    this.cfg_dashboardFilter = tk.StringVar(value=config.get("Telemetry-DashboardFilter"))
+    this.cfg_dashboardPipSysTopic = tk.StringVar(value=config.get("Telemetry-DashboardPipSysTopic"))
+    if not cfg_dashboardPipSysTopic.get():
+        cfg_dashboardPipSysTopic.set(DEFAULT_PIP_SYS_TOPIC)
+    this.cfg_dashboardPipEngTopic = tk.StringVar(value=config.get("Telemetry-DashboardPipEngTopic"))
+    if not cfg_dashboardPipEngTopic.get():
+        cfg_dashboardPipEngTopic.set(DEFAULT_PIP_ENG_TOPIC)
+    this.cfg_dashboardPipWepTopic = tk.StringVar(value=config.get("Telemetry-DashboardPipWepTopic"))
+    if not cfg_dashboardPipWepTopic.get():
+        cfg_dashboardPipWepTopic.set(DEFAULT_PIP_WEP_TOPIC)
 
     # journal 
     this.cfg_journalTopic = tk.StringVar(value="journal")
@@ -297,9 +326,9 @@ def dashboard_entry(cmdr, is_beta, entry):
                         if (oldFlags ^ newFlags) & mask:
                             telemetry.publish(myTopic + "/" + STATUS_FLAG[bit], payload=(newFlags & mask) and 1, qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()        
                 elif key == 'Pips' and this.cfg_dashboardPipFormat.get() == 'discrete':
-                    telemetry.publish(myTopic + "/sys", payload=str(entry[key][0]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
-                    telemetry.publish(myTopic + "/eng", payload=str(entry[key][1]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
-                    telemetry.publish(myTopic + "/wep", payload=str(entry[key][2]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()                    
+                    telemetry.publish(myTopic + "/" + this.cfg_dashboardPipSysTopic.get(), payload=str(entry[key][0]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
+                    telemetry.publish(myTopic + "/" + this.cfg_dashboardPipEngTopic.get(), payload=str(entry[key][1]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
+                    telemetry.publish(myTopic + "/" + this.cfg_dashboardPipWepTopic.get(), payload=str(entry[key][2]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()                    
                 else:                
                     telemetry.publish(myTopic, payload=str(entry[key]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
                 this.currentStatus[key] = entry[key] 
