@@ -118,7 +118,7 @@ def plugin_prefs(parent):
 
     this.tnbDbStatus = tk.LabelFrame(tnbDashboard, text='Status', bg=nb.Label().cget('background'))
     tnbDbStatus.grid(padx=PADX, row=2, column=0, columnspan=4, sticky=tk.NSEW)
-    tnbDbStatus.columnconfigure(1, weight=1)
+    #tnbDbStatus.columnconfigure(0, weight=1)
     
     nb.Checkbutton(tnbDbStatus, text="Flags", variable=this.cfg_dashboardFilters['Flags'], command=prefStateChange).grid(padx=PADX, row=1, sticky=tk.W)
     nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Flags']).grid(padx=PADX, row=1, column=1, sticky=tk.W)
@@ -160,8 +160,12 @@ def plugin_prefs(parent):
 
     # telemetry settings tab for discrete flags
     this.tnbFlags = nb.Frame(tnb)
-    tnbFlags.columnconfigure(1, weight=1)
+    tnbFlags.grid_columnconfigure(0, weight=1, uniform="telemetry_flags")
+    tnbFlags.grid_columnconfigure(1, weight=1, uniform="telemetry_flags")
+    tnbFlags.grid_columnconfigure(2, weight=1, uniform="telemetry_flags")
+    tnbFlags.grid_columnconfigure(3, weight=1, uniform="telemetry_flags")
     
+    '''
     nb.Checkbutton(tnbFlags, text="Docked", variable=this.cfg_dashboardFlagFilters[0]).grid(padx=PADX, row=2, sticky=tk.W)
     nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[0]).grid(padx=PADX, row=2, column=1, sticky=tk.W)
     nb.Checkbutton(tnbFlags, text="Landed", variable=this.cfg_dashboardFlagFilters[1]).grid(padx=PADX, row=2, column=2, sticky=tk.W)
@@ -236,6 +240,15 @@ def plugin_prefs(parent):
     nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[30]).grid(padx=PADX, row=12, column=1, sticky=tk.W)
     nb.Checkbutton(tnbFlags, text="Bit31", variable=this.cfg_dashboardFlagFilters[31]).grid(padx=PADX, row=12, column=2, sticky=tk.W)
     nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[31]).grid(padx=PADX, row=12, column=3, sticky=tk.W)
+    '''
+
+    for i in range(1, 17):
+        nb.Label(tnbFlags, text="Row " + str(i) + ", Column 1").grid(padx=PADX, row=i, column=0)#, sticky=tk.W)
+        nb.Label(tnbFlags, text="Row " + str(i) + ", Column 2").grid(padx=PADX, row=i, column=1)#, sticky=tk.W)
+        nb.Label(tnbFlags, text="Row " + str(i) + ", Column 3").grid(padx=PADX, row=i, column=2)#, sticky=tk.W)
+        nb.Label(tnbFlags, text="Row " + str(i) + ", Column 4").grid(padx=PADX, row=i, column=3)#, sticky=tk.W)
+
+
 
     # telemetry settings tab for journal entry items    
     tnbJournal = nb.Frame(tnb)
