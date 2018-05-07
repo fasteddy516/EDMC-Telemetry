@@ -8,12 +8,6 @@
 # Requires the Elite Dangerous Market Connector: https://github.com/Marginal/EDMarketConnector/wiki
 # Uses the MQTT protocol (http://mqtt.org/) and Eclipse Paho MQTT Python Client (https://github.com/eclipse/paho.mqtt.python)
 
-'''
-- add individual flag filtering and topic naming (requires its own settings notebook tab)
-- journal processing - right now there is literally none
-
-'''
-
 import requests
 import sys
 import ttk
@@ -58,20 +52,21 @@ this = sys.modules[__name__] # for holding globals
 def plugin_start():
     loadConfiguration()
     initializeTelemetry()
-    print "Telemetry: Started"
+    #print "Telemetry: Started"
     return "Telemetry"
 
 # Plugin shutdown
 def plugin_stop():
     stopTelemetry()
-    print "Telemetry: Stopped"
+    #print "Telemetry: Stopped"
 
+# Show broker connection status on main UI
 def plugin_app(parent):
     label = tk.Label(parent, text="Telemetry")
     this.status = tk.Label(parent, anchor=tk.W, text="Offline", state=tk.DISABLED)
     return (label, this.status)
     
-# settings tab for plugin
+# Settings tab for plugin
 def plugin_prefs(parent):
     
     # set up the primary frame for our assigned notebook tab
@@ -118,7 +113,6 @@ def plugin_prefs(parent):
 
     this.tnbDbStatus = tk.LabelFrame(tnbDashboard, text='Status', bg=nb.Label().cget('background'))
     tnbDbStatus.grid(padx=PADX, row=2, column=0, columnspan=4, sticky=tk.NSEW)
-    #tnbDbStatus.columnconfigure(0, weight=1)
     
     nb.Checkbutton(tnbDbStatus, text="Flags", variable=this.cfg_dashboardFilters['Flags'], command=prefStateChange).grid(padx=PADX, row=1, sticky=tk.W)
     nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Flags']).grid(padx=PADX, row=1, column=1, sticky=tk.W)
@@ -126,7 +120,8 @@ def plugin_prefs(parent):
     nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['GuiFocus']).grid(padx=PADX, row=1, column=3, sticky=tk.W)
 
     nb.Label(tnbDbStatus, text="Flag Format").grid(padx=PADX, row=2, sticky=tk.W)
-    nb.OptionMenu(tnbDbStatus, this.cfg_dashboardFlagFormat, this.cfg_dashboardFlagFormat.get(), 'combined', 'discrete').grid(padx=PADX, row=2, column=1, sticky=tk.W)
+    dbFlagOptions = ['combined', 'discrete']
+    nb.OptionMenu(tnbDbStatus, this.cfg_dashboardFlagFormat, this.cfg_dashboardFlagFormat.get(), *dbFlagOptions, command=prefStateChange).grid(padx=PADX, row=2, column=1, sticky=tk.W)
     nb.Checkbutton(tnbDbStatus, text="Latitude", variable=this.cfg_dashboardFilters['Latitude'], command=prefStateChange).grid(padx=PADX, row=2, column=2, sticky=tk.W)
     nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Latitude']).grid(padx=PADX, row=2, column=3, sticky=tk.W)
 
@@ -157,21 +152,28 @@ def plugin_prefs(parent):
     nb.Label(tnbDbPips, text="Wep").grid(padx=PADX, pady=(0,8), row=1, column=4, sticky=tk.W)
     nb.Entry(tnbDbPips, textvariable=this.cfg_dashboardPipWepTopic).grid(padx=PADX, pady=(0,8), row=1, column=5, sticky=tk.W)
 
-
     # telemetry settings tab for discrete flags
-    this.tnbFlags = nb.Frame(tnb)
+    tnbFlags = nb.Frame(tnb)
+    this.tnbFlagsLF = tk.LabelFrame(tnbFlags, text='Discrete Flag Settings', bg=nb.Label().cget('background'))
+    tnbFlagsLF.grid(padx=PADX, row=2, column=0, columnspan=4, sticky=tk.NSEW)
     for i in xrange(4):
         tnbFlags.grid_columnconfigure(i, weight=1, uniform="telemetry_flags")
-    flagLabels = ['Docked (Landing Pad)', 'Landed (Planet)', 'Landing Gear Down', 'Shields Up', 'Supercruise', 'FlightAssist Off', 'Hardpoints Deployed', 'In Wing', 'Lights On', 'Cargo Scoop Deployed', 'Silent Running', 'Scooping Fuel', 'SRV Handbrake', 'SRV Turret', 'SRV Under Ship', 'SRV DriveAssist', 'FSD Mass Locked', 'FSD Charging', 'FSD Cooldown', 'Low Fuel (<25%)', 'Overheating (>100%)', 'Has Lat Long', 'Is In Danger', 'Being Interdicted', 'In Main Ship', 'In Fighter', 'In SRV', 'Bit 27', 'Bit 28', 'Bit 29', 'Bit 30', 'Bit 31' ] 
+    flagLabels = [ 'Docked (Landing Pad)', 'Landed (Planet)', 'Landing Gear Down', 'Shields Up', 'Supercruise', 'FlightAssist Off', 'Hardpoints Deployed', 'In Wing', 'Lights On', 'Cargo Scoop Deployed', 'Silent Running', 'Scooping Fuel', 'SRV Handbrake', 'SRV Turret', 'SRV Under Ship', 'SRV DriveAssist', 'FSD Mass Locked', 'FSD Charging', 'FSD Cooldown', 'Low Fuel (<25%)', 'Overheating (>100%)', 'Has Lat Long', 'Is In Danger', 'Being Interdicted', 'In Main Ship', 'In Fighter', 'In SRV', 'Bit 27', 'Bit 28', 'Bit 29', 'Bit 30', 'Bit 31' ] 
     for i in xrange(16):
         for j in xrange(2):
-            nb.Checkbutton(tnbFlags, text=flagLabels[i + (16 * j)], variable=this.cfg_dashboardFlagFilters[i + (16 * j)]).grid(padx=PADX, row=i, column=(0 + (2 * j)), sticky=tk.W)
-            nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[i + (16 * j)]).grid(padx=PADX, row=i, column=(1 + (2 * j)), sticky=tk.W)
+            nb.Checkbutton(tnbFlagsLF, text=flagLabels[i + (16 * j)], variable=this.cfg_dashboardFlagFilters[i + (16 * j)]).grid(padx=PADX, pady=PADY, row=i, column=(0 + (2 * j)), sticky=tk.W)
+            nb.Entry(tnbFlagsLF, textvariable=this.cfg_dashboardFlagTopics[i + (16 * j)]).grid(padx=PADX, pady=PADY, row=i, column=(1 + (2 * j)), sticky=tk.W)
 
     # telemetry settings tab for journal entry items    
     tnbJournal = nb.Frame(tnb)
     tnbJournal.columnconfigure(1, weight=1)
-    nb.Label(tnbJournal, text="Journal-specific settings have not been implemented yet.").grid(sticky=tk.EW)
+    nb.Label(tnbJournal, text='Publish Format').grid(padx=PADX, row=1, column=0, sticky=tk.W)
+    jOptions = ['none', 'raw'] #, 'processed'] # note that the 'processed' setting will be added at a later time
+    nb.OptionMenu(tnbJournal, this.cfg_journalFormat, this.cfg_journalFormat.get(), *jOptions, command=prefStateChange).grid(padx=PADX, row=1, column=1, sticky=tk.W)
+    jTopic_label = nb.Label(tnbJournal, text='Topic')
+    jTopic_label.grid(padx=PADX, row=1, column=2, sticky=tk.W)
+    jTopic_entry = nb.Entry(tnbJournal, textvariable=this.cfg_journalTopic)
+    jTopic_entry.grid(padx=PADX, row=1, column=3, sticky=tk.W)
     
     # add the preferences tabs we've created to our assigned EDMC settings tab
     tnb.add(tnbMain, text = "MQTT")
@@ -188,7 +190,6 @@ def plugin_prefs(parent):
     return frame
 
 
-
 # Update enabled/disabled states of configuration elements
 def prefStateChange(format='processed'):
     if format == 'raw':
@@ -198,16 +199,16 @@ def prefStateChange(format='processed'):
     for element in this.tnbDbStatus.winfo_children():
         element['state'] = newState
 
-    newState = (this.cfg_dashboardPipFormat.get() == 'discrete'and this.cfg_dashboardFormat.get() == 'processed' and this.cfg_dashboardFilters['Pips'].get()) and tk.NORMAL or tk.DISABLED
+    newState = (this.cfg_dashboardPipFormat.get() == 'discrete' and this.cfg_dashboardFormat.get() == 'processed' and this.cfg_dashboardFilters['Pips'].get()) and tk.NORMAL or tk.DISABLED
     for element in this.tnbDbPips.winfo_children():
         element['state'] = newState
 
-    #newState = (this.cfg_dashboardFlagFormat.get() == 'discrete'and this.cfg_dashboardFormat.get() == 'processed' and this.cfg_dashboardFilters['Flags'].get()) and tk.NORMAL or tk.DISABLED
-    #for element in this.tnbFlags.winfo_children():
-    #    element['state'] = newState
+    newState = (this.cfg_dashboardFlagFormat.get() == 'discrete' and this.cfg_dashboardFormat.get() == 'processed' and this.cfg_dashboardFilters['Flags'].get()) and tk.NORMAL or tk.DISABLED
+    for element in this.tnbFlagsLF.winfo_children():
+        element['state'] = newState
     
 
-
+# save user settings
 def prefs_changed():
     # broker
     config.set("Telemetry-BrokerAddress", this.cfg_brokerAddress.get())
@@ -242,10 +243,16 @@ def prefs_changed():
     config.set("Telemetry-DashboardPipEngTopic", this.cfg_dashboardPipEngTopic.get())    
     config.set("Telemetry-DashboardPipWepTopic", this.cfg_dashboardPipWepTopic.get())    
 
+    # journal    
+    config.set("Telemetry-JournalFormat", this.cfg_journalFormat.get())
+    config.set("Telemetry-JournalTopic", this.cfg_journalTopic.get())
+
+    # restart mqtt connections using new settings
     stopTelemetry()
     startTelemetry()
 
 
+# load user settings using defaults if necessary
 def loadConfiguration():
     # broker
     this.cfg_brokerAddress = tk.StringVar(value=config.get("Telemetry-BrokerAddress"))
@@ -275,15 +282,12 @@ def loadConfiguration():
     this.cfg_dashboardTopics = {}
     jsonTemp = config.get("Telemetry-DashboardFilterJSON")
     if not jsonTemp:
-        print "Using default dashboard filters json"
         dfTemp = json.loads(DEFAULT_DASHBOARD_FILTER_JSON)
     else:
-        print "Using saved dashboard filters json"
         dfTemp = json.loads(jsonTemp)
     for key in dfTemp:
         this.cfg_dashboardFilters[key] = tk.IntVar(value=int(dfTemp[key][0]) and 1)
         this.cfg_dashboardTopics[key] = tk.StringVar(value=str(dfTemp[key][1]))
-        print key + ": " + str(cfg_dashboardFilters[key].get()) + "," + cfg_dashboardTopics[key].get()
     
     # dashboard - status flags
     this.cfg_dashboardFlagFormat = tk.StringVar(value=config.get("Telemetry-DashboardFlagFormat"))
@@ -294,28 +298,21 @@ def loadConfiguration():
         cfg_dashboardFlagTopic.set(DEFAULT_FLAG_TOPIC)
     jsonTemp = config.get("Telemetry-DashboardFlagFilterJSON")
     if not jsonTemp:
-        print "Using default dashboard flag filters json"
         dffTemp = json.loads(DEFAULT_FLAG_FILTER_JSON)
     else:
-        print "Using saved dashboard flag filters json"
         dffTemp = json.loads(jsonTemp)
     this.cfg_dashboardFlagFilters = []
     for flag in dffTemp:
         this.cfg_dashboardFlagFilters.append(tk.IntVar(value=int(flag) and 1))
     jsonTemp = config.get("Telemetry-DashboardFlagTopicsJSON")
     if not jsonTemp:
-        print "Using default dashboard flag topics json"
         dftTemp = json.loads(DEFAULT_FLAG_TOPICS_JSON)
     else:
-        print "Using saved dashboard flag topics json"
         dftTemp = json.loads(jsonTemp)
     this.cfg_dashboardFlagTopics = []
     for topic in dftTemp:
         this.cfg_dashboardFlagTopics.append(tk.StringVar(value=str(topic)))
     
-    for bit in xrange(32):
-        print this.cfg_dashboardFlagTopics[bit].get() + ": " + str(this.cfg_dashboardFlagFilters[bit].get())
-        
     # dashboard - pips
     this.cfg_dashboardPipFormat = tk.StringVar(value=config.get("Telemetry-DashboardPipFormat"))
     if not cfg_dashboardPipFormat.get():
@@ -334,32 +331,46 @@ def loadConfiguration():
         cfg_dashboardPipWepTopic.set(DEFAULT_PIP_WEP_TOPIC)
 
     # journal 
-    this.cfg_journalTopic = tk.StringVar(value="journal")
+    this.cfg_journalFormat = tk.StringVar(value=config.get("Telemetry-JournalFormat"))
+    if not cfg_journalFormat.get():
+        cfg_journalFormat.set(DEFAULT_JOURNAL_FORMAT)
+    this.cfg_journalTopic = tk.StringVar(value=config.get("Telemetry-JournalTopic"))
+    if not cfg_journalTopic.get():
+        cfg_journalTopic.set(DEFAULT_JOURNAL_TOPIC)
 
+
+# process player journal entries 
 def journal_entry(cmdr, system, station, entry):
-    telemetry.publish(cfg_rootTopic.get() + "/" + cfg_journalTopic.get(), payload=json.dumps(entry), qos=0, retain=False)
-    print "Telemetry: Journal Entry Received"
+    
+    # if 'raw' journal status has been requested, publish the whole json string using the specified topic
+    if this.cfg_journalFormat.get() == 'raw':
+        telemetry.publish(cfg_rootTopic.get() + "/" + cfg_journalTopic.get(), payload=json.dumps(entry), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
+    
 
-# dashboard status
+# process dashboard status entries
 def dashboard_entry(cmdr, is_beta, entry):
 
     # start building message topic
     dbTopic = cfg_rootTopic.get() + "/" + cfg_dashboardTopic.get()
 
-    # if 'raw' dashboard status has been requested, publish the whole json string
+    # if 'raw' dashboard status has been requested, publish the whole json string using the specified topic
     if this.cfg_dashboardFormat.get() == 'raw':
         telemetry.publish(dbTopic, payload=json.dumps(entry), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
     
     # if 'processed' dashboard status has been requested, format with topics and filter as specified 
     elif this.cfg_dashboardFormat.get() == 'processed':
-        for key in entry:
+        for key in entry: # scan through each key/value pair in the journal entry
             # always ignore these keys
             if key == 'timestamp' or key == 'event':
                 continue
         
             # publish any updated data that has been requested via configuration options
             if this.cfg_dashboardFilters.has_key(key) and this.cfg_dashboardFilters[key].get() == 1 and (not this.currentStatus.has_key(key) or this.currentStatus[key] != entry[key]):
+                
+                # update topic for this particular status item
                 myTopic = dbTopic + "/" + this.cfg_dashboardTopics[key].get()
+                
+                # additional processing for discrete flag states
                 if key == 'Flags' and this.cfg_dashboardFlagFormat.get() == 'discrete':
                     if not this.currentStatus.has_key(key):
                         oldFlags = ~entry[key] & 0x07FFFFFF
@@ -370,30 +381,38 @@ def dashboard_entry(cmdr, is_beta, entry):
                         mask = 1 << bit
                         if ((oldFlags ^ newFlags) & mask) and this.cfg_dashboardFlagFilters[bit].get():
                             telemetry.publish(myTopic + "/" + this.cfg_dashboardFlagTopics[bit].get(), payload=str((newFlags & mask) and 1), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()        
+                
+                # additional processing for discrete pip updates
                 elif key == 'Pips' and this.cfg_dashboardPipFormat.get() == 'discrete':
                     telemetry.publish(myTopic + "/" + this.cfg_dashboardPipSysTopic.get(), payload=str(entry[key][0]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
                     telemetry.publish(myTopic + "/" + this.cfg_dashboardPipEngTopic.get(), payload=str(entry[key][1]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
                     telemetry.publish(myTopic + "/" + this.cfg_dashboardPipWepTopic.get(), payload=str(entry[key][2]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()                    
+                              
+                # standard processing for most status updates
                 else:                
                     telemetry.publish(myTopic, payload=str(entry[key]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
+                
+                # update internal tracking variable (used to filter unnecessary updates)
                 this.currentStatus[key] = entry[key] 
 
 
 def telemetryCallback_on_connect(client, userdata, flags, rc):
     this.status['text'] = 'Connected'
     this.status['state'] = tk.NORMAL
-    print("Connected with result code "+str(rc))
+    #print("Connected with result code "+str(rc))
 
 def telemetryCallback_on_disconnect(client, userdata, rc):
     this.status['text'] = 'Offline'
     this.status['state'] = tk.DISABLED
-    print("Disconnected with result code "+str(rc))
+    #print("Disconnected with result code "+str(rc))
 
 def telemetryCallback_on_message(client, userdata, msg):
-    print(msg.topic+" "+str(msg.payload))
+    #print(msg.topic+" "+str(msg.payload))
+    pass
 
 def telemetryCallback_on_publish(client, userdata, mid):
-    print("> Published Message ID "+str(mid))
+    #print("> Published Message ID "+str(mid))
+    pass
 
 def initializeTelemetry():
     this.currentStatus = {}
