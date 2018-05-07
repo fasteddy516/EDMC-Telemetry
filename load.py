@@ -160,95 +160,13 @@ def plugin_prefs(parent):
 
     # telemetry settings tab for discrete flags
     this.tnbFlags = nb.Frame(tnb)
-    tnbFlags.grid_columnconfigure(0, weight=1, uniform="telemetry_flags")
-    tnbFlags.grid_columnconfigure(1, weight=1, uniform="telemetry_flags")
-    tnbFlags.grid_columnconfigure(2, weight=1, uniform="telemetry_flags")
-    tnbFlags.grid_columnconfigure(3, weight=1, uniform="telemetry_flags")
-    
-    '''
-    nb.Checkbutton(tnbFlags, text="Docked", variable=this.cfg_dashboardFlagFilters[0]).grid(padx=PADX, row=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[0]).grid(padx=PADX, row=2, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="Landed", variable=this.cfg_dashboardFlagFilters[1]).grid(padx=PADX, row=2, column=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[1]).grid(padx=PADX, row=2, column=3, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="LandingGear", variable=this.cfg_dashboardFlagFilters[2]).grid(padx=PADX, row=2, column=4, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[2]).grid(padx=PADX, row=2, column=5, sticky=tk.W)
-    
-    nb.Checkbutton(tnbFlags, text="Shields", variable=this.cfg_dashboardFlagFilters[3]).grid(padx=PADX, row=3, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[3]).grid(padx=PADX, row=3, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="Supercruise", variable=this.cfg_dashboardFlagFilters[4]).grid(padx=PADX, row=3, column=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[4]).grid(padx=PADX, row=3, column=3, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="FlightAssistOff", variable=this.cfg_dashboardFlagFilters[5]).grid(padx=PADX, row=3, column=4, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[5]).grid(padx=PADX, row=3, column=5, sticky=tk.W)
-
-    nb.Checkbutton(tnbFlags, text="Hardpoints", variable=this.cfg_dashboardFlagFilters[6]).grid(padx=PADX, row=4, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[6]).grid(padx=PADX, row=4, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="InWing", variable=this.cfg_dashboardFlagFilters[7]).grid(padx=PADX, row=4, column=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[7]).grid(padx=PADX, row=4, column=3, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="Lights", variable=this.cfg_dashboardFlagFilters[8]).grid(padx=PADX, row=4, column=4, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[8]).grid(padx=PADX, row=4, column=5, sticky=tk.W)
-
-    nb.Checkbutton(tnbFlags, text="CargoScoop", variable=this.cfg_dashboardFlagFilters[9]).grid(padx=PADX, row=5, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[9]).grid(padx=PADX, row=5, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="SilentRunning", variable=this.cfg_dashboardFlagFilters[10]).grid(padx=PADX, row=5, column=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[10]).grid(padx=PADX, row=5, column=3, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="Scooping", variable=this.cfg_dashboardFlagFilters[11]).grid(padx=PADX, row=5, column=4, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[11]).grid(padx=PADX, row=5, column=5, sticky=tk.W)
-
-    nb.Checkbutton(tnbFlags, text="SrvHandbrake", variable=this.cfg_dashboardFlagFilters[12]).grid(padx=PADX, row=6, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[12]).grid(padx=PADX, row=6, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="SrvTurret", variable=this.cfg_dashboardFlagFilters[13]).grid(padx=PADX, row=6, column=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[13]).grid(padx=PADX, row=6, column=3, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="SrvUnderShip", variable=this.cfg_dashboardFlagFilters[14]).grid(padx=PADX, row=6, column=4, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[14]).grid(padx=PADX, row=6, column=5, sticky=tk.W)
-
-    nb.Checkbutton(tnbFlags, text="SrvDriveAssist", variable=this.cfg_dashboardFlagFilters[15]).grid(padx=PADX, row=7, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[15]).grid(padx=PADX, row=7, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="FsdMassLocked", variable=this.cfg_dashboardFlagFilters[16]).grid(padx=PADX, row=7, column=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[16]).grid(padx=PADX, row=7, column=3, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="FsdCharging", variable=this.cfg_dashboardFlagFilters[17]).grid(padx=PADX, row=7, column=4, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[17]).grid(padx=PADX, row=7, column=5, sticky=tk.W)
-
-    nb.Checkbutton(tnbFlags, text="FsdCooldown", variable=this.cfg_dashboardFlagFilters[18]).grid(padx=PADX, row=8, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[18]).grid(padx=PADX, row=8, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="LowFuel", variable=this.cfg_dashboardFlagFilters[19]).grid(padx=PADX, row=8, column=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[19]).grid(padx=PADX, row=8, column=3, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="Overheating", variable=this.cfg_dashboardFlagFilters[20]).grid(padx=PADX, row=8, column=4, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[20]).grid(padx=PADX, row=8, column=5, sticky=tk.W)
-
-    nb.Checkbutton(tnbFlags, text="HasLatLong", variable=this.cfg_dashboardFlagFilters[21]).grid(padx=PADX, row=9, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[21]).grid(padx=PADX, row=9, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="IsInDanger", variable=this.cfg_dashboardFlagFilters[22]).grid(padx=PADX, row=9, column=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[22]).grid(padx=PADX, row=9, column=3, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="BeingInterdicted", variable=this.cfg_dashboardFlagFilters[23]).grid(padx=PADX, row=9, column=4, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[23]).grid(padx=PADX, row=9, column=5, sticky=tk.W)
-
-    nb.Checkbutton(tnbFlags, text="InMainShip", variable=this.cfg_dashboardFlagFilters[24]).grid(padx=PADX, row=10, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[24]).grid(padx=PADX, row=10, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="InFighter", variable=this.cfg_dashboardFlagFilters[25]).grid(padx=PADX, row=10, column=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[25]).grid(padx=PADX, row=10, column=3, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="InSrv", variable=this.cfg_dashboardFlagFilters[26]).grid(padx=PADX, row=10, column=4, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[26]).grid(padx=PADX, row=10, column=5, sticky=tk.W)
-
-    nb.Checkbutton(tnbFlags, text="Bit27", variable=this.cfg_dashboardFlagFilters[27]).grid(padx=PADX, row=11, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[27]).grid(padx=PADX, row=11, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="Bit28", variable=this.cfg_dashboardFlagFilters[28]).grid(padx=PADX, row=11, column=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[28]).grid(padx=PADX, row=11, column=3, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="Bit29", variable=this.cfg_dashboardFlagFilters[29]).grid(padx=PADX, row=11, column=4, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[29]).grid(padx=PADX, row=11, column=5, sticky=tk.W)
-
-    nb.Checkbutton(tnbFlags, text="Bit30", variable=this.cfg_dashboardFlagFilters[30]).grid(padx=PADX, row=12, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[30]).grid(padx=PADX, row=12, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbFlags, text="Bit31", variable=this.cfg_dashboardFlagFilters[31]).grid(padx=PADX, row=12, column=2, sticky=tk.W)
-    nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[31]).grid(padx=PADX, row=12, column=3, sticky=tk.W)
-    '''
-
-    for i in range(1, 17):
-        nb.Label(tnbFlags, text="Row " + str(i) + ", Column 1").grid(padx=PADX, row=i, column=0)#, sticky=tk.W)
-        nb.Label(tnbFlags, text="Row " + str(i) + ", Column 2").grid(padx=PADX, row=i, column=1)#, sticky=tk.W)
-        nb.Label(tnbFlags, text="Row " + str(i) + ", Column 3").grid(padx=PADX, row=i, column=2)#, sticky=tk.W)
-        nb.Label(tnbFlags, text="Row " + str(i) + ", Column 4").grid(padx=PADX, row=i, column=3)#, sticky=tk.W)
-
-
+    for i in xrange(4):
+        tnbFlags.grid_columnconfigure(i, weight=1, uniform="telemetry_flags")
+    flagLabels = ['Docked (Landing Pad)', 'Landed (Planet)', 'Landing Gear Down', 'Shields Up', 'Supercruise', 'FlightAssist Off', 'Hardpoints Deployed', 'In Wing', 'Lights On', 'Cargo Scoop Deployed', 'Silent Running', 'Scooping Fuel', 'SRV Handbrake', 'SRV Turret', 'SRV Under Ship', 'SRV DriveAssist', 'FSD Mass Locked', 'FSD Charging', 'FSD Cooldown', 'Low Fuel (<25%)', 'Overheating (>100%)', 'Has Lat Long', 'Is In Danger', 'Being Interdicted', 'In Main Ship', 'In Fighter', 'In SRV', 'Bit 27', 'Bit 28', 'Bit 29', 'Bit 30', 'Bit 31' ] 
+    for i in xrange(16):
+        for j in xrange(2):
+            nb.Checkbutton(tnbFlags, text=flagLabels[i + (16 * j)], variable=this.cfg_dashboardFlagFilters[i + (16 * j)]).grid(padx=PADX, row=i, column=(0 + (2 * j)), sticky=tk.W)
+            nb.Entry(tnbFlags, textvariable=this.cfg_dashboardFlagTopics[i + (16 * j)]).grid(padx=PADX, row=i, column=(1 + (2 * j)), sticky=tk.W)
 
     # telemetry settings tab for journal entry items    
     tnbJournal = nb.Frame(tnb)
@@ -425,6 +343,7 @@ def journal_entry(cmdr, system, station, entry):
 # dashboard status
 def dashboard_entry(cmdr, is_beta, entry):
 
+    # start building message topic
     dbTopic = cfg_rootTopic.get() + "/" + cfg_dashboardTopic.get()
 
     # if 'raw' dashboard status has been requested, publish the whole json string
