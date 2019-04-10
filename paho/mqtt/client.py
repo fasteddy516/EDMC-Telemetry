@@ -18,15 +18,31 @@ protocol that is easy to implement and suitable for low powered devices.
 """
 import collections
 import errno
+import os
 import platform
-import random
 import select
 import socket
 
+ssl = None
 try:
     import ssl
 except ImportError:
-    ssl = None
+    pass
+
+socks = None
+try:
+    import socks
+except ImportError:
+    pass
+
+try:
+    # Python 3
+    from urllib import request as urllib_dot_request
+    from urllib import parse as urllib_dot_parse
+except ImportError:
+    # Python 2
+    import urllib as urllib_dot_request
+    import urlparse as urllib_dot_parse
 
 import struct
 import sys
@@ -142,10 +158,16 @@ MQTT_ERR_UNKNOWN = 13
 MQTT_ERR_ERRNO = 14
 MQTT_ERR_QUEUE_SIZE = 15
 
+MQTT_CLIENT = 0
+MQTT_BRIDGE = 1
+
 sockpair_data = b"0"
 
-
 class WebsocketConnectionError(ValueError):
+    pass
+
+
+class WouldBlockError(Exception):
     pass
 
 
@@ -453,10 +475,23 @@ class Client(object):
       and will be one of MQTT_LOG_INFO, MQTT_LOG_NOTICE, MQTT_LOG_WARNING,
       MQTT_LOG_ERR, and MQTT_LOG_DEBUG. The message itself is in buf.
 
+    on_socket_open(client, userdata, sock): Called when the socket has been opened. Use this
+      to register the socket with an external event loop for reading.
+
+    on_socket_close(client, userdata, sock): Called when the socket is about to be closed.
+      Use this to unregister a socket from an external event loop for reading.
+
+    on_socket_register_write(client, userdata, sock): Called when a write operation to the
+      socket failed because it would have blocked, e.g. output buffer full. Use this to
+      register the socket with an external event loop for writing.
+
+    on_socket_unregister_write(client, userdata, sock): Called when a write operation to the
+      socket succeeded after it had previously failed. Use this to unregister the socket
+      from an external event loop for writing.
     """
 
     def __init__(self, client_id="", clean_session=True, userdata=None,
-            protocol=MQTTv311, transport="tcp"):
+                 protocol=MQTTv311, transport="tcp"):
         """client_id is the unique client id string used when connecting to the
         broker. If client_id is zero length or None, then the behaviour is
         defined by which protocol version is in use. If using MQTT v3.1.1, then
@@ -491,7 +526,9 @@ class Client(object):
         if not clean_session and (client_id == "" or client_id is None):
             raise ValueError('A client id must be provided if clean session is False.')
 
-        self._transport = transport
+        if transport.lower() not in ('websockets', 'tcp'):
+            raise ValueError('transport must be "websockets" or "tcp", not %s' % transport)
+        self._transport = transport.lower()
         self._protocol = protocol
         self._userdata = userdata
         self._sock = None
@@ -500,7 +537,7 @@ class Client(object):
         self._message_retry = 20
         self._last_retry_check = 0
         self._clean_session = clean_session
-
+        self._client_mode = MQTT_CLIENT
         # [MQTT-3.1.3-4] Client Id must be UTF-8 encoded string.
         if client_id == "" or client_id is None:
             if protocol == MQTTv31:
@@ -533,8 +570,8 @@ class Client(object):
         self._ping_t = 0
         self._last_mid = 0
         self._state = mqtt_cs_new
-        self._out_messages = []
-        self._in_messages = []
+        self._out_messages = collections.OrderedDict()
+        self._in_messages = collections.OrderedDict()
         self._max_inflight_messages = 20
         self._inflight_messages = 0
         self._max_queued_messages = 0
@@ -547,7 +584,8 @@ class Client(object):
         self._host = ""
         self._port = 1883
         self._bind_address = ""
-        self._in_callback = threading.Lock()
+        self._proxy = {}
+        self._in_callback_mutex = threading.Lock()
         self._callback_mutex = threading.RLock()
         self._out_packet_mutex = threading.Lock()
         self._current_out_packet_mutex = threading.RLock()
@@ -555,12 +593,14 @@ class Client(object):
         self._out_message_mutex = threading.RLock()
         self._in_message_mutex = threading.Lock()
         self._reconnect_delay_mutex = threading.Lock()
+        self._mid_generate_mutex = threading.Lock()
         self._thread = None
         self._thread_terminate = False
         self._ssl = False
         self._ssl_context = None
         self._tls_insecure = False  # Only used when SSL context does not have check_hostname attribute
         self._logger = None
+        self._registered_write = False
         # No default callbacks
         self._on_log = None
         self._on_connect = None
@@ -569,22 +609,69 @@ class Client(object):
         self._on_publish = None
         self._on_unsubscribe = None
         self._on_disconnect = None
+        self._on_socket_open = None
+        self._on_socket_close = None
+        self._on_socket_register_write = None
+        self._on_socket_unregister_write = None
         self._websocket_path = "/mqtt"
         self._websocket_extra_headers = None
 
     def __del__(self):
-        pass
+        self._reset_sockets()
 
-    def reinitialise(self, client_id="", clean_session=True, userdata=None):
-        if self._sock:
-            self._sock.close()
+    def _sock_recv(self, bufsize):
+        try:
+            return self._sock.recv(bufsize)
+        except socket.error as err:
+            if self._ssl and err.errno == ssl.SSL_ERROR_WANT_READ:
+                raise WouldBlockError()
+            if self._ssl and err.errno == ssl.SSL_ERROR_WANT_WRITE:
+                self._call_socket_register_write()
+                raise WouldBlockError()
+            if err.errno == EAGAIN:
+                raise WouldBlockError()
+            raise
+
+    def _sock_send(self, buf):
+        try:
+            return self._sock.send(buf)
+        except socket.error as err:
+            if self._ssl and err.errno == ssl.SSL_ERROR_WANT_READ:
+                raise WouldBlockError()
+            if self._ssl and err.errno == ssl.SSL_ERROR_WANT_WRITE:
+                self._call_socket_register_write()
+                raise WouldBlockError()
+            if err.errno == EAGAIN:
+                self._call_socket_register_write()
+                raise WouldBlockError()
+            raise
+
+    def _sock_close(self):
+        """Close the connection to the server."""
+        if not self._sock:
+            return
+
+        try:
+            sock = self._sock
             self._sock = None
+            self._call_socket_unregister_write(sock)
+            self._call_socket_close(sock)
+        finally:
+            # In case a callback fails, still close the socket to avoid leaking the file descriptor.
+            sock.close()
+
+    def _reset_sockets(self):
+        self._sock_close()
+
         if self._sockpairR:
             self._sockpairR.close()
             self._sockpairR = None
         if self._sockpairW:
             self._sockpairW.close()
             self._sockpairW = None
+
+    def reinitialise(self, client_id="", clean_session=True, userdata=None):
+        self._reset_sockets()
 
         self.__init__(client_id, clean_session, userdata)
 
@@ -742,9 +829,35 @@ class Client(object):
             # If verify_mode is CERT_NONE then the host name will never be checked
             self._ssl_context.check_hostname = not value
 
+    def proxy_set(self, **proxy_args):
+        """Configure proxying of MQTT connection. Enables support for SOCKS or
+        HTTP proxies.
+
+        Proxying is done through the PySocks library. Brief descriptions of the
+        proxy_args parameters are below; see the PySocks docs for more info.
+
+        (Required)
+        proxy_type: One of {socks.HTTP, socks.SOCKS4, or socks.SOCKS5}
+        proxy_addr: IP address or DNS name of proxy server
+
+        (Optional)
+        proxy_rdns: boolean indicating whether proxy lookup should be performed
+            remotely (True, default) or locally (False)
+        proxy_username: username for SOCKS5 proxy, or userid for SOCKS4 proxy
+        proxy_password: password for SOCKS5 proxy
+
+        Must be called before connect() or connect_async()."""
+        if socks is None:
+            raise ValueError("PySocks must be installed for proxy support.")
+        elif not self._proxy_is_valid(proxy_args):
+            raise ValueError("proxy_type and/or proxy_addr are invalid.")
+        else:
+            self._proxy = proxy_args
+
     def enable_logger(self, logger=None):
-        if not logger:
-            if self._logger:
+        """ Enables a logger to send log messages to """
+        if logger is None:
+            if self._logger is not None:
                 # Do not replace existing logger
                 return
             logger = logging.getLogger(__name__)
@@ -800,7 +913,7 @@ class Client(object):
 
             try:
                 return self.connect(host, port, keepalive, bind_address)
-            except:
+            except Exception:
                 pass
 
         raise ValueError("No SRV hosts responded")
@@ -825,15 +938,13 @@ class Client(object):
         if keepalive < 0:
             raise ValueError('Keepalive must be >=0.')
         if bind_address != "" and bind_address is not None:
-            if (sys.version_info[0] == 2 and sys.version_info[1] < 7) or (
-                        sys.version_info[0] == 3 and sys.version_info[1] < 2):
+            if sys.version_info < (2, 7) or (3, 0) < sys.version_info < (3, 2):
                 raise ValueError('bind_address requires Python 2.7 or 3.2.')
 
         self._host = host
         self._port = port
         self._keepalive = keepalive
         self._bind_address = bind_address
-
         self._state = mqtt_cs_connect_async
 
     def reconnect_delay_set(self, min_delay=1, max_delay=120):
@@ -880,19 +991,13 @@ class Client(object):
         self._ping_t = 0
         self._state = mqtt_cs_new
 
-        if self._sock:
-            self._sock.close()
-            self._sock = None
+        self._sock_close()
 
         # Put messages in progress in a valid state.
         self._messages_reconnect_reset()
 
         try:
-            if (sys.version_info[0] == 2 and sys.version_info[1] < 7) or (
-                        sys.version_info[0] == 3 and sys.version_info[1] < 2):
-                sock = socket.create_connection((self._host, self._port))
-            else:
-                sock = socket.create_connection((self._host, self._port), source_address=(self._bind_address, 0))
+            sock = self._create_socket_connection()
         except socket.error as err:
             if err.errno != errno.EINPROGRESS and err.errno != errno.EWOULDBLOCK and err.errno != EAGAIN:
                 raise
@@ -936,6 +1041,8 @@ class Client(object):
 
         self._sock = sock
         self._sock.setblocking(0)
+        self._registered_write = False
+        self._call_socket_open()
 
         return self._send_connect(self._keepalive, self._clean_session)
 
@@ -952,7 +1059,7 @@ class Client(object):
         messages with QoS>0.
 
         timeout: The time in seconds to wait for incoming/outgoing network
-          traffic before timing out and returning.
+            traffic before timing out and returning.
         max_packets: Not currently used.
 
         Returns MQTT_ERR_SUCCESS on success.
@@ -993,10 +1100,9 @@ class Client(object):
             # Can occur if we just reconnected but rlist/wlist contain a -1 for
             # some reason.
             return MQTT_ERR_CONN_LOST
-        except KeyboardInterrupt:
-            # Allow ^C to interrupt
-            raise
-        except:
+        except Exception:
+            # Note that KeyboardInterrupt, etc. can still terminate since they
+            # are not derived from Exception
             return MQTT_ERR_UNKNOWN
 
         if self._sock in socklist[0] or pending_bytes > 0:
@@ -1101,7 +1207,11 @@ class Client(object):
                     message.info.rc = MQTT_ERR_QUEUE_SIZE
                     return message.info
 
-                self._out_messages.append(message)
+                if local_mid in self._out_messages:
+                    message.info.rc = MQTT_ERR_QUEUE_SIZE
+                    return message.info
+
+                self._out_messages[message.mid] = message
                 if self._max_inflight_messages == 0 or self._inflight_messages < self._max_inflight_messages:
                     self._inflight_messages += 1
                     if qos == 1:
@@ -1132,15 +1242,32 @@ class Client(object):
 
         username: The username to authenticate with. Need have no relationship to the client id. Must be unicode    
             [MQTT-3.1.3-11].
+            Set to None to reset client back to not using username/password for broker authentication.
         password: The password to authenticate with. Optional, set to None if not required. If it is unicode, then it 
             will be encoded as UTF-8.
         """
 
         # [MQTT-3.1.3-11] User name must be UTF-8 encoded string
-        self._username = username.encode('utf-8')
+        self._username = None if username is None else username.encode('utf-8')
         self._password = password
         if isinstance(self._password, unicode):
             self._password = self._password.encode('utf-8')
+
+    def enable_bridge_mode(self):
+        """Sets the client in a bridge mode instead of client mode.
+
+        Must be called before connect() to have any effect.
+        Requires brokers that support bridge mode.
+
+        Under bridge mode, the broker will identify the client as a bridge and
+        not send it's own messages back to it. Hence a subsciption of # is
+        possible without message loops. This feature also correctly propagates
+        the retain flag on the messages.
+
+        Currently Mosquitto and RSMB support this feature. This feature can
+        be used to create a bridge between multiple broker.
+        """
+        self._client_mode = MQTT_BRIDGE
 
     def disconnect(self):
         """Disconnect a connected client from the broker."""
@@ -1305,13 +1432,19 @@ class Client(object):
         if max_packets < 1:
             max_packets = 1
 
-        for _ in range(0, max_packets):
-            rc = self._packet_write()
-            if rc > 0:
-                return self._loop_rc_handle(rc)
-            elif rc == MQTT_ERR_AGAIN:
-                return MQTT_ERR_SUCCESS
-        return MQTT_ERR_SUCCESS
+        try:
+            for _ in range(0, max_packets):
+                rc = self._packet_write()
+                if rc > 0:
+                    return self._loop_rc_handle(rc)
+                elif rc == MQTT_ERR_AGAIN:
+                    return MQTT_ERR_SUCCESS
+            return MQTT_ERR_SUCCESS
+        finally:
+            if self.want_write():
+                self._call_socket_register_write()
+            else:
+                self._call_socket_unregister_write()
 
     def want_write(self):
         """Call to determine if there is network data waiting to be written.
@@ -1340,9 +1473,7 @@ class Client(object):
         if self._ping_t > 0 and now - self._ping_t >= self._keepalive:
             # client->ping_t != 0 means we are waiting for a pingresp.
             # This hasn't happened in the keepalive time so we should disconnect.
-            if self._sock:
-                self._sock.close()
-                self._sock = None
+            self._sock_close()
 
             if self._state == mqtt_cs_disconnecting:
                 rc = MQTT_ERR_SUCCESS
@@ -1351,8 +1482,11 @@ class Client(object):
 
             with self._callback_mutex:
                 if self.on_disconnect:
-                    with self._in_callback:
-                        self.on_disconnect(self, self._userdata, rc)
+                    with self._in_callback_mutex:
+                        try:
+                            self.on_disconnect(self, self._userdata, rc)
+                        except Exception as err:
+                            self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_disconnect: %s', err)
 
             return MQTT_ERR_CONN_LOST
 
@@ -1467,7 +1601,7 @@ class Client(object):
             if self._state == mqtt_cs_connect_async:
                 try:
                     self.reconnect()
-                except (socket.error, WebsocketConnectionError):
+                except (socket.error, OSError, WebsocketConnectionError):
                     if not retry_first_connection:
                         raise
                     self._easy_log(MQTT_LOG_DEBUG, "Connection failed, retrying")
@@ -1704,7 +1838,7 @@ class Client(object):
         """ Define the disconnect callback implementation.
 
         Expected signature is:
-            disconnect_callback(client, userdata, self)
+            disconnect_callback(client, userdata, rc)
 
         client:     the client instance for this callback
         userdata:   the private user data as set in Client() or userdata_set()
@@ -1716,6 +1850,136 @@ class Client(object):
         """
         with self._callback_mutex:
             self._on_disconnect = func
+
+    @property
+    def on_socket_open(self):
+        """If implemented, called just after the socket was opend."""
+        return self._on_socket_open
+
+    @on_socket_open.setter
+    def on_socket_open(self, func):
+        """Define the socket_open callback implementation.
+
+        This should be used to register the socket to an external event loop for reading.
+
+        Expected signature is:
+            socket_open_callback(client, userdata, socket)
+
+        client:     the client instance for this callback
+        userdata:   the private user data as set in Client() or userdata_set()
+        sock:       the socket which was just opened.
+        """
+        with self._callback_mutex:
+            self._on_socket_open = func
+
+    def _call_socket_open(self):
+        """Call the socket_open callback with the just-opened socket"""
+        with self._callback_mutex:
+            if self.on_socket_open:
+                with self._in_callback_mutex:
+                    try:
+                        self.on_socket_open(self, self._userdata, self._sock)
+                    except Exception as err:
+                        self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_socket_open: %s', err)
+
+    @property
+    def on_socket_close(self):
+        """If implemented, called just before the socket is closed."""
+        return self._on_socket_close
+
+    @on_socket_close.setter
+    def on_socket_close(self, func):
+        """Define the socket_close callback implementation.
+
+        This should be used to unregister the socket from an external event loop for reading.
+
+        Expected signature is:
+            socket_close_callback(client, userdata, socket)
+
+        client:     the client instance for this callback
+        userdata:   the private user data as set in Client() or userdata_set()
+        sock:       the socket which is about to be closed.
+        """
+        with self._callback_mutex:
+            self._on_socket_close = func
+
+    def _call_socket_close(self, sock):
+        """Call the socket_close callback with the about-to-be-closed socket"""
+        with self._callback_mutex:
+            if self.on_socket_close:
+                with self._in_callback_mutex:
+                    try:
+                        self.on_socket_close(self, self._userdata, sock)
+                    except Exception as err:
+                        self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_socket_close: %s', err)
+
+    @property
+    def on_socket_register_write(self):
+        """If implemented, called when the socket needs writing but can't."""
+        return self._on_socket_register_write
+
+    @on_socket_register_write.setter
+    def on_socket_register_write(self, func):
+        """Define the socket_register_write callback implementation.
+
+        This should be used to register the socket with an external event loop for writing.
+
+        Expected signature is:
+            socket_register_write_callback(client, userdata, socket)
+
+        client:     the client instance for this callback
+        userdata:   the private user data as set in Client() or userdata_set()
+        sock:       the socket which should be registered for writing
+        """
+        with self._callback_mutex:
+            self._on_socket_register_write = func
+
+    def _call_socket_register_write(self):
+        """Call the socket_register_write callback with the unwritable socket"""
+        if not self._sock or self._registered_write:
+            return
+        self._registered_write = True
+        with self._callback_mutex:
+            if self.on_socket_register_write:
+                try:
+                    self.on_socket_register_write(self, self._userdata, self._sock)
+                except Exception as err:
+                    self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_socket_register_write: %s', err)
+
+    @property
+    def on_socket_unregister_write(self):
+        """If implemented, called when the socket doesn't need writing anymore."""
+        return self._on_socket_unregister_write
+
+    @on_socket_unregister_write.setter
+    def on_socket_unregister_write(self, func):
+        """Define the socket_unregister_write callback implementation.
+
+        This should be used to unregister the socket from an external event loop for writing.
+
+        Expected signature is:
+            socket_unregister_write_callback(client, userdata, socket)
+
+        client:     the client instance for this callback
+        userdata:   the private user data as set in Client() or userdata_set()
+        sock:       the socket which should be unregistered for writing
+        """
+        with self._callback_mutex:
+            self._on_socket_unregister_write = func
+
+    def _call_socket_unregister_write(self, sock=None):
+        """Call the socket_unregister_write callback with the writable socket"""
+        sock = sock or self._sock
+        if not sock or not self._registered_write:
+            return
+        self._registered_write = False
+
+        with self._callback_mutex:
+            if self.on_socket_unregister_write:
+                try:
+                    self.on_socket_unregister_write(self, self._userdata, sock)
+                except Exception as err:
+                    self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_socket_unregister_write: %s', err)
 
     def message_callback_add(self, sub, callback):
         """Register a message callback for a specific topic.
@@ -1752,17 +2016,18 @@ class Client(object):
 
     def _loop_rc_handle(self, rc):
         if rc:
-            if self._sock:
-                self._sock.close()
-                self._sock = None
+            self._sock_close()
 
             if self._state == mqtt_cs_disconnecting:
                 rc = MQTT_ERR_SUCCESS
 
             with self._callback_mutex:
                 if self.on_disconnect:
-                    with self._in_callback:
-                        self.on_disconnect(self, self._userdata, rc)
+                    with self._in_callback_mutex:
+                        try:
+                            self.on_disconnect(self, self._userdata, rc)
+                        except Exception as err:
+                            self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_disconnect: %s', err)
         return rc
 
     def _packet_read(self):
@@ -1781,13 +2046,11 @@ class Client(object):
         # Finally, free the memory and reset everything to starting conditions.
         if self._in_packet['command'] == 0:
             try:
-                command = self._sock.recv(1)
+                command = self._sock_recv(1)
+            except WouldBlockError:
+                return MQTT_ERR_AGAIN
             except socket.error as err:
-                if self._ssl and (err.errno == ssl.SSL_ERROR_WANT_READ or err.errno == ssl.SSL_ERROR_WANT_WRITE):
-                    return MQTT_ERR_AGAIN
-                if err.errno == EAGAIN:
-                    return MQTT_ERR_AGAIN
-                print(err)
+                self._easy_log(MQTT_LOG_ERR, 'failed to receive on socket: %s', err)
                 return 1
             else:
                 if len(command) == 0:
@@ -1801,13 +2064,11 @@ class Client(object):
             # http://publib.boulder.ibm.com/infocenter/wmbhelp/v6r0m0/topic/com.ibm.etools.mft.doc/ac10870_.htm
             while True:
                 try:
-                    byte = self._sock.recv(1)
+                    byte = self._sock_recv(1)
+                except WouldBlockError:
+                    return MQTT_ERR_AGAIN
                 except socket.error as err:
-                    if self._ssl and (err.errno == ssl.SSL_ERROR_WANT_READ or err.errno == ssl.SSL_ERROR_WANT_WRITE):
-                        return MQTT_ERR_AGAIN
-                    if err.errno == EAGAIN:
-                        return MQTT_ERR_AGAIN
-                    print(err)
+                    self._easy_log(MQTT_LOG_ERR, 'failed to receive on socket: %s', err)
                     return 1
                 else:
                     if len(byte) == 0:
@@ -1830,13 +2091,11 @@ class Client(object):
 
         while self._in_packet['to_process'] > 0:
             try:
-                data = self._sock.recv(self._in_packet['to_process'])
+                data = self._sock_recv(self._in_packet['to_process'])
+            except WouldBlockError:
+                return MQTT_ERR_AGAIN
             except socket.error as err:
-                if self._ssl and (err.errno == ssl.SSL_ERROR_WANT_READ or err.errno == ssl.SSL_ERROR_WANT_WRITE):
-                    return MQTT_ERR_AGAIN
-                if err.errno == EAGAIN:
-                    return MQTT_ERR_AGAIN
-                print(err)
+                self._easy_log(MQTT_LOG_ERR, 'failed to receive on socket: %s', err)
                 return 1
             else:
                 if len(data) == 0:
@@ -1870,17 +2129,16 @@ class Client(object):
             packet = self._current_out_packet
 
             try:
-                write_length = self._sock.send(packet['packet'][packet['pos']:])
+                write_length = self._sock_send(packet['packet'][packet['pos']:])
             except (AttributeError, ValueError):
                 self._current_out_packet_mutex.release()
                 return MQTT_ERR_SUCCESS
+            except WouldBlockError:
+                self._current_out_packet_mutex.release()
+                return MQTT_ERR_AGAIN
             except socket.error as err:
                 self._current_out_packet_mutex.release()
-                if self._ssl and (err.errno == ssl.SSL_ERROR_WANT_READ or err.errno == ssl.SSL_ERROR_WANT_WRITE):
-                    return MQTT_ERR_AGAIN
-                if err.errno == EAGAIN:
-                    return MQTT_ERR_AGAIN
-                print(err)
+                self._easy_log(MQTT_LOG_ERR, 'failed to receive on socket: %s', err)
                 return 1
 
             if write_length > 0:
@@ -1891,8 +2149,11 @@ class Client(object):
                     if (packet['command'] & 0xF0) == PUBLISH and packet['qos'] == 0:
                         with self._callback_mutex:
                             if self.on_publish:
-                                with self._in_callback:
-                                    self.on_publish(self, self._userdata, packet['mid'])
+                                with self._in_callback_mutex:
+                                    try:
+                                        self.on_publish(self, self._userdata, packet['mid'])
+                                    except Exception as err:
+                                        self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_publish: %s', err)
 
                         packet['info']._set_as_published()
 
@@ -1904,12 +2165,13 @@ class Client(object):
 
                         with self._callback_mutex:
                             if self.on_disconnect:
-                                with self._in_callback:
-                                    self.on_disconnect(self, self._userdata, 0)
+                                with self._in_callback_mutex:
+                                    try:
+                                        self.on_disconnect(self, self._userdata, 0)
+                                    except Exception as err:
+                                        self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_disconnect: %s', err)
 
-                        if self._sock:
-                            self._sock.close()
-                            self._sock = None
+                        self._sock_close()
                         return MQTT_ERR_SUCCESS
 
                     with self._out_packet_mutex:
@@ -1928,10 +2190,14 @@ class Client(object):
         return MQTT_ERR_SUCCESS
 
     def _easy_log(self, level, fmt, *args):
-        if self.on_log:
+        if self.on_log is not None:
             buf = fmt % args
-            self.on_log(self, self._userdata, level, buf)
-        if self._logger:
+            try:
+                self.on_log(self, self._userdata, level, buf)
+            except Exception:
+                # Can't _easy_log this, as we'll recurse until we break
+                pass # self._logger will pick this up, so we're fine
+        if self._logger is not None:
             level_std = LOGGING_LEVEL[level]
             self._logger.log(level_std, fmt, *args)
 
@@ -1952,9 +2218,7 @@ class Client(object):
                     self._last_msg_out = now
                     self._last_msg_in = now
             else:
-                if self._sock:
-                    self._sock.close()
-                    self._sock = None
+                self._sock_close()
 
                 if self._state == mqtt_cs_disconnecting:
                     rc = MQTT_ERR_SUCCESS
@@ -1962,14 +2226,18 @@ class Client(object):
                     rc = 1
                 with self._callback_mutex:
                     if self.on_disconnect:
-                        with self._in_callback:
-                            self.on_disconnect(self, self._userdata, rc)
+                        with self._in_callback_mutex:
+                            try:
+                                self.on_disconnect(self, self._userdata, rc)
+                            except Exception as err:
+                                self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_disconnect: %s', err)
 
     def _mid_generate(self):
-        self._last_mid += 1
-        if self._last_mid == 65536:
-            self._last_mid = 1
-        return self._last_mid
+        with self._mid_generate_mutex:
+            self._last_mid += 1
+            if self._last_mid == 65536:
+                self._last_mid = 1
+            return self._last_mid
 
     @staticmethod
     def _topic_wildcard_len_check(topic):
@@ -2076,9 +2344,9 @@ class Client(object):
         self._easy_log(MQTT_LOG_DEBUG, "Sending PUBREC (Mid: %d)", mid)
         return self._send_command_with_mid(PUBREC, mid, False)
 
-    def _send_pubrel(self, mid, dup=False):
+    def _send_pubrel(self, mid):
         self._easy_log(MQTT_LOG_DEBUG, "Sending PUBREL (Mid: %d)", mid)
-        return self._send_command_with_mid(PUBREL | 2, mid, dup)
+        return self._send_command_with_mid(PUBREL | 2, mid, False)
 
     def _send_command_with_mid(self, command, mid, dup):
         # For PUBACK, PUBCOMP, PUBREC, and PUBREL
@@ -2119,6 +2387,11 @@ class Client(object):
         command = CONNECT
         packet = bytearray()
         packet.append(command)
+
+        # as per the mosquitto broker, if the MSB of this version is set
+        # to 1, then it treats the connection as a bridge
+        if self._client_mode == MQTT_BRIDGE:
+            proto_ver |= 0x80
 
         self._pack_remaining_length(packet, remaining_length)
         packet.extend(struct.pack("!H" + str(len(protocol)) + "sBBH", len(protocol), protocol, proto_ver, connect_flags,
@@ -2170,7 +2443,13 @@ class Client(object):
             self._pack_str16(packet, t)
             packet.append(q)
 
-        self._easy_log(MQTT_LOG_DEBUG, "Sending SUBSCRIBE (d%d) %s", dup, topics)
+        self._easy_log(
+            MQTT_LOG_DEBUG,
+            "Sending SUBSCRIBE (d%d, m%d) %s",
+            dup,
+            local_mid,
+            topics,
+        )
         return (self._packet_queue(command, packet, local_mid, 1), local_mid)
 
     def _send_unsubscribe(self, dup, topics):
@@ -2188,13 +2467,19 @@ class Client(object):
             self._pack_str16(packet, t)
 
         # topics_repr = ", ".join("'"+topic.decode('utf8')+"'" for topic in topics)
-        self._easy_log(MQTT_LOG_DEBUG, "Sending UNSUBSCRIBE (d%d) %s", dup, topics)
+        self._easy_log(
+            MQTT_LOG_DEBUG,
+            "Sending UNSUBSCRIBE (d%d, m%d) %s",
+            dup,
+            local_mid,
+            topics,
+        )
         return (self._packet_queue(command, packet, local_mid, 1), local_mid)
 
     def _message_retry_check_actual(self, messages, mutex):
         with mutex:
             now = time_func()
-            for m in messages:
+            for m in messages.values():
                 if m.timestamp + self._message_retry < now:
                     if m.state == mqtt_ms_wait_for_puback or m.state == mqtt_ms_wait_for_pubrec:
                         m.timestamp = now
@@ -2209,12 +2494,10 @@ class Client(object):
                         )
                     elif m.state == mqtt_ms_wait_for_pubrel:
                         m.timestamp = now
-                        m.dup = True
                         self._send_pubrec(m.mid)
                     elif m.state == mqtt_ms_wait_for_pubcomp:
                         m.timestamp = now
-                        m.dup = True
-                        self._send_pubrel(m.mid, True)
+                        self._send_pubrel(m.mid)
 
     def _message_retry_check(self):
         self._message_retry_check_actual(self._out_messages, self._out_message_mutex)
@@ -2223,7 +2506,7 @@ class Client(object):
     def _messages_reconnect_reset_out(self):
         with self._out_message_mutex:
             self._inflight_messages = 0
-            for m in self._out_messages:
+            for m in self._out_messages.values():
                 m.timestamp = 0
                 if self._max_inflight_messages == 0 or self._inflight_messages < self._max_inflight_messages:
                     if m.qos == 0:
@@ -2235,22 +2518,29 @@ class Client(object):
                         m.state = mqtt_ms_publish
                     elif m.qos == 2:
                         # self._inflight_messages = self._inflight_messages + 1
-                        if m.state == mqtt_ms_wait_for_pubcomp:
-                            m.state = mqtt_ms_resend_pubrel
-                            m.dup = True
-                        else:
-                            if m.state == mqtt_ms_wait_for_pubrec:
+                        if self._clean_session:
+                            if m.state != mqtt_ms_publish:
                                 m.dup = True
                             m.state = mqtt_ms_publish
+                        else:
+                            if m.state == mqtt_ms_wait_for_pubcomp:
+                                m.state = mqtt_ms_resend_pubrel
+                            else:
+                                if m.state == mqtt_ms_wait_for_pubrec:
+                                    m.dup = True
+                                m.state = mqtt_ms_publish
                 else:
                     m.state = mqtt_ms_queued
 
     def _messages_reconnect_reset_in(self):
         with self._in_message_mutex:
-            for m in self._in_messages:
+            if self._clean_session:
+                self._in_messages = collections.OrderedDict()
+                return
+            for m in self._in_messages.values():
                 m.timestamp = 0
                 if m.qos != 2:
-                    self._in_messages.pop(self._in_messages.index(m))
+                    self._in_messages.pop(m.mid)
                 else:
                     # Preserve current state
                     pass
@@ -2285,9 +2575,11 @@ class Client(object):
                 raise
 
         if self._thread is None:
-            if self._in_callback.acquire(False):
-                self._in_callback.release()
+            if self._in_callback_mutex.acquire(False):
+                self._in_callback_mutex.release()
                 return self.loop_write()
+
+        self._call_socket_register_write()
 
         return MQTT_ERR_SUCCESS
 
@@ -2368,20 +2660,23 @@ class Client(object):
             if self.on_connect:
                 flags_dict = {}
                 flags_dict['session present'] = flags & 0x01
-                with self._in_callback:
-                    self.on_connect(self, self._userdata, flags_dict, result)
+                with self._in_callback_mutex:
+                    try:
+                        self.on_connect(self, self._userdata, flags_dict, result)
+                    except Exception as err:
+                        self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_connect: %s', err)
 
         if result == 0:
             rc = 0
             with self._out_message_mutex:
-                for m in self._out_messages:
+                for m in self._out_messages.values():
                     m.timestamp = time_func()
                     if m.state == mqtt_ms_queued:
                         self.loop_write()  # Process outgoing messages that have just been queued up
                         return MQTT_ERR_SUCCESS
 
                     if m.qos == 0:
-                        with self._in_callback:  # Don't call loop_write after _send_publish()
+                        with self._in_callback_mutex:  # Don't call loop_write after _send_publish()
                             rc = self._send_publish(
                                 m.mid,
                                 m.topic.encode('utf-8'),
@@ -2396,7 +2691,7 @@ class Client(object):
                         if m.state == mqtt_ms_publish:
                             self._inflight_messages += 1
                             m.state = mqtt_ms_wait_for_puback
-                            with self._in_callback:  # Don't call loop_write after _send_publish()
+                            with self._in_callback_mutex:  # Don't call loop_write after _send_publish()
                                 rc = self._send_publish(
                                     m.mid,
                                     m.topic.encode('utf-8'),
@@ -2411,7 +2706,7 @@ class Client(object):
                         if m.state == mqtt_ms_publish:
                             self._inflight_messages += 1
                             m.state = mqtt_ms_wait_for_pubrec
-                            with self._in_callback:  # Don't call loop_write after _send_publish()
+                            with self._in_callback_mutex:  # Don't call loop_write after _send_publish()
                                 rc = self._send_publish(
                                     m.mid,
                                     m.topic.encode('utf-8'),
@@ -2425,8 +2720,8 @@ class Client(object):
                         elif m.state == mqtt_ms_resend_pubrel:
                             self._inflight_messages += 1
                             m.state = mqtt_ms_wait_for_pubcomp
-                            with self._in_callback:  # Don't call loop_write after _send_publish()
-                                rc = self._send_pubrel(m.mid, m.dup)
+                            with self._in_callback_mutex:  # Don't call loop_write after _send_publish()
+                                rc = self._send_pubrel(m.mid)
                             if rc != 0:
                                 return rc
                     self.loop_write()  # Process outgoing messages that have just been queued up
@@ -2446,8 +2741,12 @@ class Client(object):
 
         with self._callback_mutex:
             if self.on_subscribe:
-                with self._in_callback:  # Don't call loop_write after _send_publish()
-                    self.on_subscribe(self, self._userdata, mid, granted_qos)
+                with self._in_callback_mutex:  # Don't call loop_write after _send_publish()
+                    try:
+                        self.on_subscribe(self, self._userdata, mid, granted_qos)
+                    except Exception as err:
+                        self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_subscribe: %s', err)
+
 
         return MQTT_ERR_SUCCESS
 
@@ -2472,13 +2771,10 @@ class Client(object):
         # This replaces an invalid topic with a message and the hex
         # representation of the topic for logging. When the user attempts to
         # access message.topic in the callback, an exception will be raised.
-        if sys.version_info[0] >= 3:
-            try:
-                print_topic = topic.decode('utf-8')
-            except UnicodeDecodeError:
-                print_topic = "TOPIC WITH INVALID UTF-8: " + str(topic)
-        else:
-            print_topic = topic
+        try:
+            print_topic = topic.decode('utf-8')
+        except UnicodeDecodeError:
+            print_topic = "TOPIC WITH INVALID UTF-8: " + str(topic)
 
         message.topic = topic
 
@@ -2507,8 +2803,7 @@ class Client(object):
             rc = self._send_pubrec(message.mid)
             message.state = mqtt_ms_wait_for_pubrel
             with self._in_message_mutex:
-                if message not in self._in_messages:
-                    self._in_messages.append(message)
+                self._in_messages[message.mid] = message
             return rc
         else:
             return MQTT_ERR_PROTOCOL
@@ -2521,27 +2816,29 @@ class Client(object):
         self._easy_log(MQTT_LOG_DEBUG, "Received PUBREL (Mid: %d)", mid)
 
         with self._in_message_mutex:
-            for i in range(len(self._in_messages)):
-                if self._in_messages[i].mid == mid:
+            if mid in self._in_messages:
+                # Only pass the message on if we have removed it from the queue - this
+                # prevents multiple callbacks for the same message.
+                message = self._in_messages.pop(mid)
+                self._handle_on_message(message)
+                self._inflight_messages -= 1
+                if self._max_inflight_messages > 0:
+                    with self._out_message_mutex:
+                        rc = self._update_inflight()
+                    if rc != MQTT_ERR_SUCCESS:
+                        return rc
 
-                    # Only pass the message on if we have removed it from the queue - this
-                    # prevents multiple callbacks for the same message.
-                    self._handle_on_message(self._in_messages[i])
-                    self._in_messages.pop(i)
-                    self._inflight_messages -= 1
-                    if self._max_inflight_messages > 0:
-                        with self._out_message_mutex:
-                            rc = self._update_inflight()
-                        if rc != MQTT_ERR_SUCCESS:
-                            return rc
-
-                    return self._send_pubcomp(mid)
-
-        return MQTT_ERR_SUCCESS
+        # FIXME: this should only be done if the message is known
+        # If unknown it's a protocol error and we should close the connection.
+        # But since we don't have (on disk) persistence for the session, it
+        # is possible that we must known about this message.
+        # Choose to acknwoledge this messsage (and thus losing a message) but
+        # avoid hanging. See #284.
+        return self._send_pubcomp(mid)
 
     def _update_inflight(self):
         # Dont lock message_mutex here
-        for m in self._out_messages:
+        for m in self._out_messages.values():
             if self._inflight_messages < self._max_inflight_messages:
                 if m.qos > 0 and m.state == mqtt_ms_queued:
                     self._inflight_messages += 1
@@ -2571,11 +2868,11 @@ class Client(object):
         self._easy_log(MQTT_LOG_DEBUG, "Received PUBREC (Mid: %d)", mid)
 
         with self._out_message_mutex:
-            for m in self._out_messages:
-                if m.mid == mid:
-                    m.state = mqtt_ms_wait_for_pubcomp
-                    m.timestamp = time_func()
-                    return self._send_pubrel(mid, False)
+            if mid in self._out_messages:
+                msg = self._out_messages[mid]
+                msg.state = mqtt_ms_wait_for_pubcomp
+                msg.timestamp = time_func()
+                return self._send_pubrel(mid)
 
         return MQTT_ERR_SUCCESS
 
@@ -2587,24 +2884,30 @@ class Client(object):
         self._easy_log(MQTT_LOG_DEBUG, "Received UNSUBACK (Mid: %d)", mid)
         with self._callback_mutex:
             if self.on_unsubscribe:
-                with self._in_callback:
-                    self.on_unsubscribe(self, self._userdata, mid)
+                with self._in_callback_mutex:
+                    try:
+                        self.on_unsubscribe(self, self._userdata, mid)
+                    except Exception as err:
+                        self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_unsubscribe: %s', err)
         return MQTT_ERR_SUCCESS
 
-    def _do_on_publish(self, idx, mid):
+    def _do_on_publish(self, mid):
         with self._callback_mutex:
             if self.on_publish:
-                with self._in_callback:
-                    self.on_publish(self, self._userdata, mid)
+                with self._in_callback_mutex:
+                    try:
+                        self.on_publish(self, self._userdata, mid)
+                    except Exception as err:
+                        self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_publish: %s', err)
 
-        msg = self._out_messages.pop(idx)
+        msg = self._out_messages.pop(mid)
+        msg.info._set_as_published()
         if msg.qos > 0:
             self._inflight_messages -= 1
             if self._max_inflight_messages > 0:
                 rc = self._update_inflight()
                 if rc != MQTT_ERR_SUCCESS:
                     return rc
-        msg.info._set_as_published()
         return MQTT_ERR_SUCCESS
 
     def _handle_pubackcomp(self, cmd):
@@ -2615,16 +2918,10 @@ class Client(object):
         self._easy_log(MQTT_LOG_DEBUG, "Received %s (Mid: %d)", cmd, mid)
 
         with self._out_message_mutex:
-            for i in range(len(self._out_messages)):
-                try:
-                    if self._out_messages[i].mid == mid:
-                        # Only inform the client the message has been sent once.
-                        rc = self._do_on_publish(i, mid)
-                        return rc
-                except IndexError:
-                    # Have removed item so i>count.
-                    # Not really an error.
-                    pass
+            if mid in self._out_messages:
+                # Only inform the client the message has been sent once.
+                rc = self._do_on_publish(mid)
+                return rc
 
         return MQTT_ERR_SUCCESS
 
@@ -2638,13 +2935,16 @@ class Client(object):
 
             if topic is not None:
                 for callback in self._on_message_filtered.iter_match(message.topic):
-                    with self._in_callback:
+                    with self._in_callback_mutex:
                         callback(self, self._userdata, message)
                     matched = True
 
             if matched == False and self.on_message:
-                with self._in_callback:
-                    self.on_message(self, self._userdata, message)
+                with self._in_callback_mutex:
+                    try:
+                        self.on_message(self, self._userdata, message)
+                    except Exception as err:
+                        self._easy_log(MQTT_LOG_ERR, 'Caught exception in on_message: %s', err)
 
     def _thread_main(self):
         self.loop_forever(retry_first_connection=True)
@@ -2670,6 +2970,77 @@ class Client(object):
 
             time.sleep(min(remaining, 1))
             remaining = target_time - time_func()
+
+    @staticmethod
+    def _proxy_is_valid(p):
+        def check(t, a):
+            return (socks is not None and
+                    t in set([socks.HTTP, socks.SOCKS4, socks.SOCKS5]) and a)
+
+        if isinstance(p, dict):
+            return check(p.get("proxy_type"), p.get("proxy_addr"))
+        elif isinstance(p, (list, tuple)):
+            return len(p) == 6 and check(p[0], p[1])
+        else:
+            return False
+
+    def _get_proxy(self):
+        if socks is None:
+            return None
+
+        # First, check if the user explicitly passed us a proxy to use
+        if self._proxy_is_valid(self._proxy):
+            return self._proxy
+
+        # Next, check for an mqtt_proxy environment variable as long as the host
+        # we're trying to connect to isn't listed under the no_proxy environment
+        # variable (matches built-in module urllib's behavior)
+        if not (hasattr(urllib_dot_request, "proxy_bypass") and
+                urllib_dot_request.proxy_bypass(self._host)):
+            env_proxies = urllib_dot_request.getproxies()
+            if "mqtt" in env_proxies:
+                parts = urllib_dot_parse.urlparse(env_proxies["mqtt"])
+                if parts.scheme == "http":
+                    proxy = {
+                        "proxy_type": socks.HTTP,
+                        "proxy_addr": parts.hostname,
+                        "proxy_port": parts.port
+                    }
+                    return proxy
+                elif parts.scheme == "socks":
+                    proxy = {
+                        "proxy_type": socks.SOCKS5,
+                        "proxy_addr": parts.hostname,
+                        "proxy_port": parts.port
+                    }
+                    return proxy
+
+        # Finally, check if the user has monkeypatched the PySocks library with
+        # a default proxy
+        socks_default = socks.get_default_proxy()
+        if self._proxy_is_valid(socks_default):
+            proxy_keys = ("proxy_type", "proxy_addr", "proxy_port",
+                          "proxy_rdns", "proxy_username", "proxy_password")
+            return dict(zip(proxy_keys, socks_default))
+
+        # If we didn't find a proxy through any of the above methods, return
+        # None to indicate that the connection should be handled normally
+        return None
+
+    def _create_socket_connection(self):
+        proxy = self._get_proxy()
+        addr = (self._host, self._port)
+        source = (self._bind_address, 0)
+
+        if sys.version_info < (2, 7) or (3, 0) < sys.version_info < (3, 2):
+            # Have to short-circuit here because of unsupported source_address
+            # param in earlier Python versions.
+            return socket.create_connection(addr)
+
+        if proxy:
+            return socks.create_connection(addr, source_address=source, **proxy)
+        else:
+            return socket.create_connection(addr, source_address=source)
 
 
 # Compatibility class for easy porting from mosquitto.py.
@@ -2795,8 +3166,8 @@ class WebsocketWrapper(object):
 
         header = bytearray()
         length = len(data)
-        mask_key = bytearray(
-            [random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)])
+
+        mask_key = bytearray(os.urandom(4))
         mask_flag = do_masking
 
         # 1 << 7 is the final flag, we don't send continuated data
@@ -2805,7 +3176,7 @@ class WebsocketWrapper(object):
         if length < 126:
             header.append(mask_flag << 7 | length)
 
-        elif length < 32768:
+        elif length < 65536:
             header.append(mask_flag << 7 | 126)
             header += struct.pack("!H", length)
 
@@ -2837,7 +3208,7 @@ class WebsocketWrapper(object):
                 self._readbuffer.extend(data)
 
             if len(data) < wanted_bytes:
-                raise socket.error(errno.EAGAIN, 0)
+                raise socket.error(EAGAIN, 0)
 
         self._readbuffer_head += length
         return self._readbuffer[self._readbuffer_head - length:self._readbuffer_head]
@@ -2911,10 +3282,10 @@ class WebsocketWrapper(object):
                     frame = self._create_frame(WebsocketWrapper.OPCODE_PONG, payload, 0)
                     self._socket.send(frame)
 
-            if opcode == WebsocketWrapper.OPCODE_BINARY:
+            if opcode == WebsocketWrapper.OPCODE_BINARY and payload_length > 0:
                 return result
             else:
-                raise socket.error(errno.EAGAIN, 0)
+                raise socket.error(EAGAIN, 0)
 
         except socket.error as err:
 
