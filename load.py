@@ -19,7 +19,7 @@ from ttkHyperlinkLabel import HyperlinkLabel
 import paho.mqtt.client as mqtt
 import json
 
-TELEMETRY_VERSION = "0.1.0"
+TELEMETRY_VERSION = "0.2.0"
 TELEMETRY_CLIENTID = "EDMCTelemetryPlugin"
 
 # default values for initial population of configuration
@@ -31,12 +31,12 @@ DEFAULT_ROOT_TOPIC = 'telemetry'
 
 DEFAULT_DASHBOARD_FORMAT = 'raw'
 DEFAULT_DASHBOARD_TOPIC = 'dashboard'
-DEFAULT_DASHBOARD_FILTER_JSON = "{\"Flags\": [1, \"flags\"], \"Pips\": [0, \"pips\"], \"FireGroup\": [0, \"firegroup\"], \"GuiFocus\": [0, \"guifocus\"], \"Latitude\": [0, \"latitude\"], \"Longitude\": [0, \"longitude\"], \"Heading\": [0, \"heading\"], \"Altitude\": [0, \"altitude\"]}"
+DEFAULT_DASHBOARD_FILTER_JSON = "{\"Flags\": [1, \"flags\"], \"Pips\": [0, \"pips\"], \"FireGroup\": [0, \"firegroup\"], \"GuiFocus\": [0, \"guifocus\"], \"Latitude\": [0, \"latitude\"], \"Longitude\": [0, \"longitude\"], \"Heading\": [0, \"heading\"], \"Altitude\": [0, \"altitude\"], \"Fuel\": [0, \"fuel\"], \"Cargo\": [0, \"cargo\"]}"
 
 DEFAULT_FLAG_FORMAT = 'combined'
 DEFAULT_FLAG_TOPIC = 'flag'
 DEFAULT_FLAG_FILTER_JSON = "[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]"
-DEFAULT_FLAG_TOPICS_JSON = "[\"docked\", \"landed\", \"landinggear\", \"shields\", \"supercruise\", \"flightassistoff\", \"hardpoints\", \"inwing\", \"lights\", \"cargoscoop\", \"silentrunning\", \"scooping\", \"srvhandbrake\", \"srvturret\", \"srvundership\", \"srvdriveassist\", \"fsdmasslocked\", \"fsdcharging\", \"fsdcooldown\", \"lowfuel\", \"overheating\", \"haslatlong\", \"isindanger\", \"beinginterdicted\", \"inmainship\", \"infighter\", \"insrv\", \"bit27\", \"bit28\", \"bit29\", \"bit30\", \"bit31\"]"
+DEFAULT_FLAG_TOPICS_JSON = "[\"docked\", \"landed\", \"landinggear\", \"shields\", \"supercruise\", \"flightassistoff\", \"hardpoints\", \"inwing\", \"lights\", \"cargoscoop\", \"silentrunning\", \"scooping\", \"srvhandbrake\", \"srvusingturret\", \"srvturretretracted\", \"srvdriveassist\", \"fsdmasslocked\", \"fsdcharging\", \"fsdcooldown\", \"lowfuel\", \"overheating\", \"haslatlong\", \"isindanger\", \"beinginterdicted\", \"inmainship\", \"infighter\", \"insrv\", \"hudinanalysis\", \"nightvision\", \"bit29\", \"bit30\", \"bit31\"]"
 DEFAULT_PIP_FORMAT = 'combined'
 DEFAULT_PIP_TOPIC = 'pips'
 DEFAULT_PIP_SYS_TOPIC = 'sys'
@@ -158,7 +158,7 @@ def plugin_prefs(parent):
     tnbFlagsLF.grid(padx=PADX, row=2, column=0, columnspan=4, sticky=tk.NSEW)
     for i in xrange(4):
         tnbFlags.grid_columnconfigure(i, weight=1, uniform="telemetry_flags")
-    flagLabels = [ 'Docked (Landing Pad)', 'Landed (Planet)', 'Landing Gear Down', 'Shields Up', 'Supercruise', 'FlightAssist Off', 'Hardpoints Deployed', 'In Wing', 'Lights On', 'Cargo Scoop Deployed', 'Silent Running', 'Scooping Fuel', 'SRV Handbrake', 'SRV Turret', 'SRV Under Ship', 'SRV DriveAssist', 'FSD Mass Locked', 'FSD Charging', 'FSD Cooldown', 'Low Fuel (<25%)', 'Overheating (>100%)', 'Has Lat Long', 'Is In Danger', 'Being Interdicted', 'In Main Ship', 'In Fighter', 'In SRV', 'Bit 27', 'Bit 28', 'Bit 29', 'Bit 30', 'Bit 31' ] 
+    flagLabels = [ 'Docked (Landing Pad)', 'Landed (Planet)', 'Landing Gear Down', 'Shields Up', 'Supercruise', 'FlightAssist Off', 'Hardpoints Deployed', 'In Wing', 'Lights On', 'Cargo Scoop Deployed', 'Silent Running', 'Scooping Fuel', 'SRV Handbrake', 'SRV Using Turret', 'SRV Turret Retracted', 'SRV DriveAssist', 'FSD Mass Locked', 'FSD Charging', 'FSD Cooldown', 'Low Fuel (<25%)', 'Overheating (>100%)', 'Has Lat Long', 'Is In Danger', 'Being Interdicted', 'In Main Ship', 'In Fighter', 'In SRV', 'HUD in Analysis mode', 'Night Vision', 'Bit 29', 'Bit 30', 'Bit 31' ] 
     for i in xrange(16):
         for j in xrange(2):
             nb.Checkbutton(tnbFlagsLF, text=flagLabels[i + (16 * j)], variable=this.cfg_dashboardFlagFilters[i + (16 * j)]).grid(padx=PADX, pady=PADY, row=i, column=(0 + (2 * j)), sticky=tk.W)
