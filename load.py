@@ -28,13 +28,15 @@ DEFAULT_BROKER_PORT = 1883
 DEFAULT_BROKER_KEEPALIVE = 60
 DEFAULT_BROKER_QOS = 0
 DEFAULT_ROOT_TOPIC = 'telemetry'
-
 DEFAULT_DASHBOARD_FORMAT = 'raw'
 DEFAULT_DASHBOARD_TOPIC = 'dashboard'
 DEFAULT_DASHBOARD_FILTER_JSON = "{\"Flags\": [1, \"flags\"], \"Pips\": [0, \"pips\"], \"FireGroup\": [0, \"firegroup\"], \"GuiFocus\": [0, \"guifocus\"], \"Latitude\": [0, \"latitude\"], \"Longitude\": [0, \"longitude\"], \"Heading\": [0, \"heading\"], \"Altitude\": [0, \"altitude\"], \"Fuel\": [0, \"fuel\"], \"Cargo\": [0, \"cargo\"]}"
-
 DEFAULT_FLAG_FORMAT = 'combined'
 DEFAULT_FLAG_TOPIC = 'flag'
+DEFAULT_FUEL_FORMAT = 'combined'
+DEFAULT_FUEL_TOPIC = 'fuel'
+DEFAULT_FUEL_MAIN_TOPIC = 'main'
+DEFAULT_FUEL_RESERVOIR_TOPIC = 'reservoir'
 DEFAULT_FLAG_FILTER_JSON = "[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]"
 DEFAULT_FLAG_TOPICS_JSON = "[\"docked\", \"landed\", \"landinggear\", \"shields\", \"supercruise\", \"flightassistoff\", \"hardpoints\", \"inwing\", \"lights\", \"cargoscoop\", \"silentrunning\", \"scooping\", \"srvhandbrake\", \"srvusingturret\", \"srvturretretracted\", \"srvdriveassist\", \"fsdmasslocked\", \"fsdcharging\", \"fsdcooldown\", \"lowfuel\", \"overheating\", \"haslatlong\", \"isindanger\", \"beinginterdicted\", \"inmainship\", \"infighter\", \"insrv\", \"hudinanalysis\", \"nightvision\", \"bit29\", \"bit30\", \"bit31\"]"
 DEFAULT_PIP_FORMAT = 'combined'
@@ -136,13 +138,19 @@ def plugin_prefs(parent):
     nb.Checkbutton(tnbDbStatus, text="Heading", variable=this.cfg_dashboardFilters['Heading'], command=prefStateChange).grid(padx=PADX, row=4, column=2, sticky=tk.W)
     nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Heading']).grid(padx=PADX, row=4, column=3, sticky=tk.W)
     
-    nb.Checkbutton(tnbDbStatus, text="FireGroup", variable=this.cfg_dashboardFilters['FireGroup'], command=prefStateChange).grid(padx=PADX, pady=(0,8), row=5, sticky=tk.W)
-    nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['FireGroup']).grid(padx=PADX, pady=(0,8), row=5, column=1, sticky=tk.W)
-    nb.Checkbutton(tnbDbStatus, text="Altitude", variable=this.cfg_dashboardFilters['Altitude'], command=prefStateChange).grid(padx=PADX, pady=(0,8), row=5, column=2, sticky=tk.W)
-    nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Altitude']).grid(padx=PADX, pady=(0,8), row=5, column=3, sticky=tk.W)
+    nb.Checkbutton(tnbDbStatus, text="Fuel", variable=this.cfg_dashboardFilters['Fuel'], command=prefStateChange).grid(padx=PADX, row=5, sticky=tk.W)
+    nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Fuel']).grid(padx=PADX, row=5, column=1, sticky=tk.W)
+    nb.Checkbutton(tnbDbStatus, text="FireGroup", variable=this.cfg_dashboardFilters['FireGroup'], command=prefStateChange).grid(padx=PADX, pady=(0,8), row=5, column=2, sticky=tk.W)
+    nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['FireGroup']).grid(padx=PADX, pady=(0,8), row=5, column=3, sticky=tk.W)
+    
+    nb.Label(tnbDbStatus, text="Fuel Format").grid(padx=PADX, row=6, sticky=tk.W)
+    dbFuelOptions = ['combined', 'discrete']
+    nb.OptionMenu(tnbDbStatus, this.cfg_dashboardFuelFormat, this.cfg_dashboardFuelFormat.get(), *dbFuelOptions, command=prefStateChange).grid(padx=PADX, row=6, column=1, sticky=tk.W)
+    nb.Checkbutton(tnbDbStatus, text="Altitude", variable=this.cfg_dashboardFilters['Altitude'], command=prefStateChange).grid(padx=PADX, pady=(0,8), row=6, column=2, sticky=tk.W)
+    nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Altitude']).grid(padx=PADX, pady=(0,8), row=6, column=3, sticky=tk.W)
 
     this.tnbDbPips = tk.LabelFrame(tnbDashboard, text='Pip Topics', bg=nb.Label().cget('background'))
-    tnbDbPips.grid(padx=PADX, pady=(8,0), row=6, column=0, columnspan=4, sticky=tk.NSEW)
+    tnbDbPips.grid(padx=PADX, pady=(8,0), row=7, column=0, columnspan=4, sticky=tk.NSEW)
     tnbDbPips.columnconfigure(1, weight=1)
 
     nb.Label(tnbDbPips, text="Sys").grid(padx=PADX, pady=(0,8), row=1, sticky=tk.W)
@@ -151,6 +159,15 @@ def plugin_prefs(parent):
     nb.Entry(tnbDbPips, textvariable=this.cfg_dashboardPipEngTopic).grid(padx=PADX, pady=(0,8), row=1, column=3, sticky=tk.W)
     nb.Label(tnbDbPips, text="Wep").grid(padx=PADX, pady=(0,8), row=1, column=4, sticky=tk.W)
     nb.Entry(tnbDbPips, textvariable=this.cfg_dashboardPipWepTopic).grid(padx=PADX, pady=(0,8), row=1, column=5, sticky=tk.W)
+
+    this.tnbDbFuel = tk.LabelFrame(tnbDashboard, text='Fuel Topics', bg=nb.Label().cget('background'))
+    tnbDbFuel.grid(padx=PADX, pady=(8,0), row=8, column=0, columnspan=4, sticky=tk.NSEW)
+    tnbDbFuel.columnconfigure(1, weight=1)
+
+    nb.Label(tnbDbFuel, text="Main").grid(padx=PADX, pady=(0,8), row=1, sticky=tk.W)
+    nb.Entry(tnbDbFuel, textvariable=this.cfg_dashboardFuelMainTopic).grid(padx=PADX, pady=(0,8), row=1, column=1, sticky=tk.W)
+    nb.Label(tnbDbFuel, text="Reservoir").grid(padx=PADX, pady=(0,8), row=1, column=2, sticky=tk.W)
+    nb.Entry(tnbDbFuel, textvariable=this.cfg_dashboardFuelReservoirTopic).grid(padx=PADX, pady=(0,8), row=1, column=3, sticky=tk.W)
 
     # telemetry settings tab for discrete flags
     tnbFlags = nb.Frame(tnb)
@@ -203,6 +220,10 @@ def prefStateChange(format='processed'):
     for element in this.tnbDbPips.winfo_children():
         element['state'] = newState
 
+    newState = (this.cfg_dashboardFuelFormat.get() == 'discrete' and this.cfg_dashboardFormat.get() == 'processed' and this.cfg_dashboardFilters['Fuel'].get()) and tk.NORMAL or tk.DISABLED
+    for element in this.tnbDbFuel.winfo_children():
+        element['state'] = newState
+
     newState = (this.cfg_dashboardFlagFormat.get() == 'discrete' and this.cfg_dashboardFormat.get() == 'processed' and this.cfg_dashboardFilters['Flags'].get()) and tk.NORMAL or tk.DISABLED
     for element in this.tnbFlagsLF.winfo_children():
         element['state'] = newState
@@ -235,6 +256,12 @@ def prefs_changed():
         dftTemp.append(this.cfg_dashboardFlagTopics[bit].get())
     config.set("Telemetry-DashboardFlagFilterJSON", json.dumps(dffTemp))
     config.set("Telemetry-DashboardFlagTopicsJSON", json.dumps(dftTemp))    
+    
+    # dashboard - fuel
+    config.set("Telemetry-DashboardFuelFormat", this.cfg_dashboardFuelFormat.get())
+    config.set("Telemetry-DashboardFuelTopic", this.cfg_dashboardFuelTopic.get())    
+    config.set("Telemetry-DashboardFuelMainTopic", this.cfg_dashboardFuelMainTopic.get())    
+    config.set("Telemetry-DashboardFuelReservoirTopic", this.cfg_dashboardFuelReservoirTopic.get())    
     
     # dashboard - pips
     config.set("Telemetry-DashboardPipFormat", this.cfg_dashboardPipFormat.get())
@@ -296,6 +323,7 @@ def loadConfiguration():
     this.cfg_dashboardFlagTopic = tk.StringVar(value=config.get("Telemetry-DashboardFlagTopic"))
     if not cfg_dashboardFlagTopic.get():
         cfg_dashboardFlagTopic.set(DEFAULT_FLAG_TOPIC)
+    
     jsonTemp = config.get("Telemetry-DashboardFlagFilterJSON")
     if not jsonTemp:
         dffTemp = json.loads(DEFAULT_FLAG_FILTER_JSON)
@@ -312,7 +340,21 @@ def loadConfiguration():
     this.cfg_dashboardFlagTopics = []
     for topic in dftTemp:
         this.cfg_dashboardFlagTopics.append(tk.StringVar(value=str(topic)))
-    
+
+    # dashboard - fuel
+    this.cfg_dashboardFuelFormat = tk.StringVar(value=config.get("Telemetry-DashboardFuelFormat"))
+    if not cfg_dashboardFuelFormat.get():
+        cfg_dashboardFuelFormat.set(DEFAULT_FUEL_FORMAT)
+    this.cfg_dashboardFuelTopic = tk.StringVar(value=config.get("Telemetry-DashboardFuelTopic"))
+    if not cfg_dashboardFuelTopic.get():
+        cfg_dashboardFuelTopic.set(DEFAULT_FUEL_TOPIC)
+    this.cfg_dashboardFuelMainTopic = tk.StringVar(value=config.get("Telemetry-DashboardFuelMainTopic"))
+    if not cfg_dashboardFuelMainTopic.get():
+        cfg_dashboardFuelMainTopic.set(DEFAULT_FUEL_MAIN_TOPIC)
+    this.cfg_dashboardFuelReservoirTopic = tk.StringVar(value=config.get("Telemetry-DashboardFuelReservoirTopic"))
+    if not cfg_dashboardFuelReservoirTopic.get():
+        cfg_dashboardFuelReservoirTopic.set(DEFAULT_FUEL_RESERVOIR_TOPIC)
+
     # dashboard - pips
     this.cfg_dashboardPipFormat = tk.StringVar(value=config.get("Telemetry-DashboardPipFormat"))
     if not cfg_dashboardPipFormat.get():
@@ -388,6 +430,14 @@ def dashboard_entry(cmdr, is_beta, entry):
                     telemetry.publish(myTopic + "/" + this.cfg_dashboardPipEngTopic.get(), payload=str(entry[key][1]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
                     telemetry.publish(myTopic + "/" + this.cfg_dashboardPipWepTopic.get(), payload=str(entry[key][2]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()                    
                               
+                # additional processing for discrete pip updates
+                elif key == 'Fuel':
+                    if this.cfg_dashboardFuelFormat.get() == 'discrete':
+                        telemetry.publish(myTopic + "/" + this.cfg_dashboardFuelMainTopic.get(), payload=str(entry[key]['FuelMain']), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
+                        telemetry.publish(myTopic + "/" + this.cfg_dashboardFuelReservoirTopic.get(), payload=str(entry[key]['FuelReservoir']), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
+                    else:
+                        telemetry.publish(myTopic, payload=str(entry[key]['FuelMain']) + ", " + str(entry[key]['FuelReservoir']), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()                        
+
                 # standard processing for most status updates
                 else:                
                     telemetry.publish(myTopic, payload=str(entry[key]), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()
