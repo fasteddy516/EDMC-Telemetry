@@ -33,12 +33,12 @@ DEFAULT_DASHBOARD_TOPIC = 'dashboard'
 DEFAULT_DASHBOARD_FILTER_JSON = "{\"Flags\": [1, \"flags\"], \"Pips\": [0, \"pips\"], \"FireGroup\": [0, \"firegroup\"], \"GuiFocus\": [0, \"guifocus\"], \"Latitude\": [0, \"latitude\"], \"Longitude\": [0, \"longitude\"], \"Heading\": [0, \"heading\"], \"Altitude\": [0, \"altitude\"], \"Fuel\": [0, \"fuel\"], \"Cargo\": [0, \"cargo\"]}"
 DEFAULT_FLAG_FORMAT = 'combined'
 DEFAULT_FLAG_TOPIC = 'flag'
+DEFAULT_FLAG_FILTER_JSON = "[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]"
+DEFAULT_FLAG_TOPICS_JSON = "[\"docked\", \"landed\", \"landinggear\", \"shields\", \"supercruise\", \"flightassistoff\", \"hardpoints\", \"inwing\", \"lights\", \"cargoscoop\", \"silentrunning\", \"scooping\", \"srvhandbrake\", \"srvusingturret\", \"srvturretretracted\", \"srvdriveassist\", \"fsdmasslocked\", \"fsdcharging\", \"fsdcooldown\", \"lowfuel\", \"overheating\", \"haslatlong\", \"isindanger\", \"beinginterdicted\", \"inmainship\", \"infighter\", \"insrv\", \"hudinanalysis\", \"nightvision\", \"bit29\", \"bit30\", \"bit31\"]"
 DEFAULT_FUEL_FORMAT = 'combined'
 DEFAULT_FUEL_TOPIC = 'fuel'
 DEFAULT_FUEL_MAIN_TOPIC = 'main'
 DEFAULT_FUEL_RESERVOIR_TOPIC = 'reservoir'
-DEFAULT_FLAG_FILTER_JSON = "[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]"
-DEFAULT_FLAG_TOPICS_JSON = "[\"docked\", \"landed\", \"landinggear\", \"shields\", \"supercruise\", \"flightassistoff\", \"hardpoints\", \"inwing\", \"lights\", \"cargoscoop\", \"silentrunning\", \"scooping\", \"srvhandbrake\", \"srvusingturret\", \"srvturretretracted\", \"srvdriveassist\", \"fsdmasslocked\", \"fsdcharging\", \"fsdcooldown\", \"lowfuel\", \"overheating\", \"haslatlong\", \"isindanger\", \"beinginterdicted\", \"inmainship\", \"infighter\", \"insrv\", \"hudinanalysis\", \"nightvision\", \"bit29\", \"bit30\", \"bit31\"]"
 DEFAULT_PIP_FORMAT = 'combined'
 DEFAULT_PIP_TOPIC = 'pips'
 DEFAULT_PIP_SYS_TOPIC = 'sys'
@@ -149,8 +149,11 @@ def plugin_prefs(parent):
     nb.Checkbutton(tnbDbStatus, text="Altitude", variable=this.cfg_dashboardFilters['Altitude'], command=prefStateChange).grid(padx=PADX, pady=(0,8), row=6, column=2, sticky=tk.W)
     nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Altitude']).grid(padx=PADX, pady=(0,8), row=6, column=3, sticky=tk.W)
 
+    nb.Checkbutton(tnbDbStatus, text="Cargo", variable=this.cfg_dashboardFilters['Cargo'], command=prefStateChange).grid(padx=PADX, row=7, sticky=tk.W)
+    nb.Entry(tnbDbStatus, textvariable=this.cfg_dashboardTopics['Cargo']).grid(padx=PADX, row=7, column=1, sticky=tk.W)
+
     this.tnbDbPips = tk.LabelFrame(tnbDashboard, text='Pip Topics', bg=nb.Label().cget('background'))
-    tnbDbPips.grid(padx=PADX, pady=(8,0), row=7, column=0, columnspan=4, sticky=tk.NSEW)
+    tnbDbPips.grid(padx=PADX, pady=(8,0), row=8, column=0, columnspan=4, sticky=tk.NSEW)
     tnbDbPips.columnconfigure(1, weight=1)
 
     nb.Label(tnbDbPips, text="Sys").grid(padx=PADX, pady=(0,8), row=1, sticky=tk.W)
@@ -161,7 +164,7 @@ def plugin_prefs(parent):
     nb.Entry(tnbDbPips, textvariable=this.cfg_dashboardPipWepTopic).grid(padx=PADX, pady=(0,8), row=1, column=5, sticky=tk.W)
 
     this.tnbDbFuel = tk.LabelFrame(tnbDashboard, text='Fuel Topics', bg=nb.Label().cget('background'))
-    tnbDbFuel.grid(padx=PADX, pady=(8,0), row=8, column=0, columnspan=4, sticky=tk.NSEW)
+    tnbDbFuel.grid(padx=PADX, pady=(8,0), row=9, column=0, columnspan=4, sticky=tk.NSEW)
     tnbDbFuel.columnconfigure(1, weight=1)
 
     nb.Label(tnbDbFuel, text="Main").grid(padx=PADX, pady=(0,8), row=1, sticky=tk.W)
