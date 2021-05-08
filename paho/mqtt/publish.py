@@ -21,6 +21,10 @@ broker, then disconnect and nothing else is required.
 from __future__ import absolute_import
 
 import collections
+try:
+    from collections.abc import Iterable
+except ImportError:
+    from collections import Iterable
 
 from . import client as paho
 from .. import mqtt
@@ -61,7 +65,7 @@ def _on_publish(client, userdata, mid):
 
 def multiple(msgs, hostname="localhost", port=1883, client_id="", keepalive=60,
              will=None, auth=None, tls=None, protocol=paho.MQTTv311,
-             transport="tcp"):
+             transport="tcp", proxy_args=None):
     """Publish multiple messages to a broker, then disconnect cleanly.
 
     This function creates an MQTT client, connects to a broker and publishes a
@@ -121,9 +125,10 @@ def multiple(msgs, hostname="localhost", port=1883, client_id="", keepalive=60,
 
     transport : set to "tcp" to use the default setting of transport which is
           raw TCP. Set to "websockets" to use WebSockets as the transport.
+    proxy_args: a dictionary that will be given to the client.
     """
 
-    if not isinstance(msgs, collections.Iterable):
+    if not isinstance(msgs, Iterable):
         raise TypeError('msgs must be an iterable')
 
     client = paho.Client(client_id=client_id, userdata=collections.deque(msgs),
@@ -131,6 +136,9 @@ def multiple(msgs, hostname="localhost", port=1883, client_id="", keepalive=60,
 
     client.on_publish = _on_publish
     client.on_connect = _on_connect
+
+    if proxy_args is not None:
+        client.proxy_set(**proxy_args)
 
     if auth:
         username = auth.get('username')
@@ -162,7 +170,7 @@ def multiple(msgs, hostname="localhost", port=1883, client_id="", keepalive=60,
 
 def single(topic, payload=None, qos=0, retain=False, hostname="localhost",
            port=1883, client_id="", keepalive=60, will=None, auth=None,
-           tls=None, protocol=paho.MQTTv311, transport="tcp"):
+           tls=None, protocol=paho.MQTTv311, transport="tcp", proxy_args=None):
     """Publish a single message to a broker, then disconnect cleanly.
 
     This function creates an MQTT client, connects to a broker and publishes a
@@ -215,9 +223,10 @@ def single(topic, payload=None, qos=0, retain=False, hostname="localhost",
 
     transport : set to "tcp" to use the default setting of transport which is
           raw TCP. Set to "websockets" to use WebSockets as the transport.
+    proxy_args: a dictionary that will be given to the client.
     """
 
     msg = {'topic':topic, 'payload':payload, 'qos':qos, 'retain':retain}
 
     multiple([msg], hostname, port, client_id, keepalive, will, auth, tls,
-             protocol, transport)
+             protocol, transport, proxy_args)
