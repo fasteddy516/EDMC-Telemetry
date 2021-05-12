@@ -32,6 +32,8 @@
     * **Keepalive**: MQTT keepalive in seconds _(default=60)_
     * **QoS**: MQTT QoS setting _(0=at most once, 1=at least once, 2=exactly once, default=0)_
     * **Root Topic**: Root topic for all MQTT messages from EDMC-Telemetry _(default=telemetry)_
+    * **Broker Username**: Username for authentication with MQTT broker
+    * **Broker Password**: Password for authentication with MQTT broker
 
   * **Dashboard Tab**
     * **Publish Format**: Determines how to publish status messages.  Select **none** to disable publishing of dashboard status, **raw** to publish dashboard status as raw JSON, or **processed** to enable selective processing of individual status elements.
