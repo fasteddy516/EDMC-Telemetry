@@ -10,8 +10,14 @@
 
 import requests
 import sys
-import ttk
-import Tkinter as tk
+try:
+    # for Python2
+    import Tkinter as tk
+    import ttk
+except ImportError:
+    # for Python3
+    import tkinter as tk
+    from tkinter import ttk
 import myNotebook as nb
 from config import config
 from ttkHyperlinkLabel import HyperlinkLabel
@@ -19,7 +25,7 @@ from ttkHyperlinkLabel import HyperlinkLabel
 import paho.mqtt.client as mqtt
 import json
 
-TELEMETRY_VERSION = "0.2.0"
+TELEMETRY_VERSION = "0.2.1"
 TELEMETRY_CLIENTID = "EDMCTelemetryPlugin"
 
 # default values for initial population of configuration
@@ -28,6 +34,8 @@ DEFAULT_BROKER_PORT = 1883
 DEFAULT_BROKER_KEEPALIVE = 60
 DEFAULT_BROKER_QOS = 0
 DEFAULT_ROOT_TOPIC = 'telemetry'
+DEFAULT_BROKER_USERNAME = ""
+DEFAULT_BROKER_PASSWORD = ""
 DEFAULT_DASHBOARD_FORMAT = 'raw'
 DEFAULT_DASHBOARD_TOPIC = 'dashboard'
 DEFAULT_DASHBOARD_FILTER_JSON = "{\"Flags\": [1, \"flags\"], \"Pips\": [0, \"pips\"], \"FireGroup\": [0, \"firegroup\"], \"GuiFocus\": [0, \"guifocus\"], \"Latitude\": [0, \"latitude\"], \"Longitude\": [0, \"longitude\"], \"Heading\": [0, \"heading\"], \"Altitude\": [0, \"altitude\"], \"Fuel\": [0, \"fuel\"], \"Cargo\": [0, \"cargo\"]}"
@@ -49,13 +57,19 @@ DEFAULT_JOURNAL_FORMAT = 'raw'
 DEFAULT_JOURNAL_TOPIC = 'journal'
 
 this = sys.modules[__name__] # for holding globals
+this._connected = False
+this.status: tk.Label = None
 
 # Plugin startup
 def plugin_start():
-    loadConfiguration()
-    initializeTelemetry()
+    loadConfiguration()    
+    this._connected = False;
     #print "Telemetry: Started"
     return "Telemetry"
+
+def plugin_start3(plugin_dir):
+    return plugin_start()
+
 
 # Plugin shutdown
 def plugin_stop():
@@ -66,10 +80,15 @@ def plugin_stop():
 def plugin_app(parent):
     label = tk.Label(parent, text="Telemetry")
     this.status = tk.Label(parent, anchor=tk.W, text="Offline", state=tk.DISABLED)
+    this.status.bind_all('<<BrokerStatus>>',update_status)
+    
+    #Start telemetry after UI has been created
+    initializeTelemetry()
+    
     return (label, this.status)
     
 # Settings tab for plugin
-def plugin_prefs(parent):
+def plugin_prefs(parent,cmdr,is_beta):
     
     # set up the primary frame for our assigned notebook tab
     frame = nb.Frame(parent) 
@@ -101,6 +120,10 @@ def plugin_prefs(parent):
     nb.OptionMenu(tnbMain, this.cfg_brokerQoS, this.cfg_brokerQoS.get(), 0, 1, 2).grid(padx=PADX, pady=PADY, row=4, column=1, sticky=tk.W)
     nb.Label(tnbMain, text="Root Topic").grid(padx=PADX, row=5, sticky=tk.W)
     nb.Entry(tnbMain, textvariable=this.cfg_rootTopic).grid(padx=PADX, pady=PADY, row=5, column=1, sticky=tk.EW)    
+    nb.Label(tnbMain, text="Username").grid(padx=PADX, row=6, sticky=tk.W)
+    nb.Entry(tnbMain, textvariable=this.cfg_brokerUsername).grid(padx=PADX, pady=PADY, row=6, column=1, sticky=tk.EW)
+    nb.Label(tnbMain, text="Password").grid(padx=PADX, row=7, sticky=tk.W)
+    nb.Entry(tnbMain, textvariable=this.cfg_brokerPassword).grid(padx=PADX, pady=PADY, row=7, column=1, sticky=tk.EW)
 
     # telemetry settings tab for dashboard status items    
     tnbDashboard = nb.Frame(tnb) 
@@ -176,11 +199,11 @@ def plugin_prefs(parent):
     tnbFlags = nb.Frame(tnb)
     this.tnbFlagsLF = tk.LabelFrame(tnbFlags, text='Discrete Flag Settings', bg=nb.Label().cget('background'))
     tnbFlagsLF.grid(padx=PADX, row=2, column=0, columnspan=4, sticky=tk.NSEW)
-    for i in xrange(4):
+    for i in range(4):
         tnbFlags.grid_columnconfigure(i, weight=1, uniform="telemetry_flags")
     flagLabels = [ 'Docked (Landing Pad)', 'Landed (Planet)', 'Landing Gear Down', 'Shields Up', 'Supercruise', 'FlightAssist Off', 'Hardpoints Deployed', 'In Wing', 'Lights On', 'Cargo Scoop Deployed', 'Silent Running', 'Scooping Fuel', 'SRV Handbrake', 'SRV Using Turret', 'SRV Turret Retracted', 'SRV DriveAssist', 'FSD Mass Locked', 'FSD Charging', 'FSD Cooldown', 'Low Fuel (<25%)', 'Overheating (>100%)', 'Has Lat Long', 'Is In Danger', 'Being Interdicted', 'In Main Ship', 'In Fighter', 'In SRV', 'HUD in Analysis mode', 'Night Vision', 'Bit 29', 'Bit 30', 'Bit 31' ] 
-    for i in xrange(16):
-        for j in xrange(2):
+    for i in range(16):
+        for j in range(2):
             nb.Checkbutton(tnbFlagsLF, text=flagLabels[i + (16 * j)], variable=this.cfg_dashboardFlagFilters[i + (16 * j)]).grid(padx=PADX, pady=PADY, row=i, column=(0 + (2 * j)), sticky=tk.W)
             nb.Entry(tnbFlagsLF, textvariable=this.cfg_dashboardFlagTopics[i + (16 * j)]).grid(padx=PADX, pady=PADY, row=i, column=(1 + (2 * j)), sticky=tk.W)
 
@@ -233,13 +256,15 @@ def prefStateChange(format='processed'):
     
 
 # save user settings
-def prefs_changed():
+def prefs_changed(cmdr, is_beta):
     # broker
     config.set("Telemetry-BrokerAddress", this.cfg_brokerAddress.get())
     config.set("Telemetry-BrokerPort", this.cfg_brokerPort.get())
     config.set("Telemetry-BrokerKeepalive", this.cfg_brokerKeepalive.get())
     config.set("Telemetry-BrokerQoS", this.cfg_brokerQoS.get())
     config.set("Telemetry-RootTopic", this.cfg_rootTopic.get())
+    config.set("Telemetry-BrokerUsername", this.cfg_brokerUsername.get())
+    config.set("Telemetry-BrokerPassword", this.cfg_brokerPassword.get())
 
     # dashboard    
     config.set("Telemetry-DashboardFormat", this.cfg_dashboardFormat.get())
@@ -254,7 +279,7 @@ def prefs_changed():
     config.set("Telemetry-DashboardFlagTopic", this.cfg_dashboardFlagTopic.get())    
     dffTemp = []
     dftTemp = []
-    for bit in xrange(32):
+    for bit in range(32):
         dffTemp.append(this.cfg_dashboardFlagFilters[bit].get() and 1)
         dftTemp.append(this.cfg_dashboardFlagTopics[bit].get())
     config.set("Telemetry-DashboardFlagFilterJSON", json.dumps(dffTemp))
@@ -300,6 +325,12 @@ def loadConfiguration():
     this.cfg_rootTopic = tk.StringVar(value=config.get("Telemetry-RootTopic"))
     if not cfg_rootTopic.get():
         cfg_rootTopic.set(DEFAULT_ROOT_TOPIC)
+    this.cfg_brokerUsername = tk.StringVar(value=config.get("Telemetry-BrokerUsername"))
+    if not cfg_brokerUsername.get():
+        cfg_brokerUsername.set(DEFAULT_BROKER_USERNAME)
+    this.cfg_brokerPassword = tk.StringVar(value=config.get("Telemetry-BrokerPassword"))
+    if not cfg_brokerPassword.get():
+        cfg_brokerPassword.set(DEFAULT_BROKER_PASSWORD)
 
     # dashboard
     this.cfg_dashboardFormat = tk.StringVar(value=config.get("Telemetry-DashboardFormat"))
@@ -385,7 +416,7 @@ def loadConfiguration():
 
 
 # process player journal entries 
-def journal_entry(cmdr, system, station, entry):
+def journal_entry(cmdr, is_beta, system, station, entry, state):
     
     # if 'raw' journal status has been requested, publish the whole json string using the specified topic
     if this.cfg_journalFormat.get() == 'raw':
@@ -422,7 +453,7 @@ def dashboard_entry(cmdr, is_beta, entry):
                     else:
                         oldFlags = this.currentStatus[key]
                     newFlags = entry[key]
-                    for bit in xrange(32):
+                    for bit in range(32):
                         mask = 1 << bit
                         if ((oldFlags ^ newFlags) & mask) and this.cfg_dashboardFlagFilters[bit].get():
                             telemetry.publish(myTopic + "/" + this.cfg_dashboardFlagTopics[bit].get(), payload=str((newFlags & mask) and 1), qos=this.cfg_brokerQoS.get(), retain=False).wait_for_publish()        
@@ -449,14 +480,24 @@ def dashboard_entry(cmdr, is_beta, entry):
                 this.currentStatus[key] = entry[key] 
 
 
+def update_status(event=None) -> None:
+    if this._connected == True:
+        this.status['text'] = 'Connected'
+        this.status['state'] = tk.NORMAL
+    else:
+        this.status['text'] = 'Offline'
+        this.status['state'] = tk.DISABLED    
+
+
 def telemetryCallback_on_connect(client, userdata, flags, rc):
-    this.status['text'] = 'Connected'
-    this.status['state'] = tk.NORMAL
+    this._connected = True;
+    this.status.event_generate('<<BrokerStatus>>', when="tail")
     #print("Connected with result code "+str(rc))
 
 def telemetryCallback_on_disconnect(client, userdata, rc):
-    this.status['text'] = 'Offline'
-    this.status['state'] = tk.DISABLED
+    if not config.shutting_down:
+        this._connected = False;
+        this.status.event_generate('<<BrokerStatus>>', when="tail")
     #print("Disconnected with result code "+str(rc))
 
 def telemetryCallback_on_message(client, userdata, msg):
@@ -478,9 +519,14 @@ def initializeTelemetry():
     startTelemetry()
 
 def startTelemetry():
+    telemetry.on_disconnect = telemetryCallback_on_disconnect
+    telemetry.username_pw_set(this.cfg_brokerUsername.get(),this.cfg_brokerPassword.get())
     telemetry.connect_async(this.cfg_brokerAddress.get(), this.cfg_brokerPort.get(), this.cfg_brokerKeepalive.get())
     telemetry.loop_start()
 
 def stopTelemetry():
+    this._connected = False;
+    this.status.event_generate('<<BrokerStatus>>', when="tail")
+    telemetry.on_disconnect = None
     telemetry.disconnect()
     telemetry.loop_stop()
