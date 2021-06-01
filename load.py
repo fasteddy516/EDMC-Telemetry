@@ -25,11 +25,11 @@ from ttkHyperlinkLabel import HyperlinkLabel
 import paho.mqtt.client as mqtt
 import json
 
-TELEMETRY_VERSION = "0.2.1"
+TELEMETRY_VERSION = "0.2.2"
 TELEMETRY_CLIENTID = "EDMCTelemetryPlugin"
 
 # default values for initial population of configuration
-DEFAULT_BROKER_ADDRESS = "127.0.0.1"
+DEFAULT_BROKER_ADDRESS = '127.0.0.1'
 DEFAULT_BROKER_PORT = 1883
 DEFAULT_BROKER_KEEPALIVE = 60
 DEFAULT_BROKER_QOS = 0
@@ -310,38 +310,38 @@ def prefs_changed(cmdr, is_beta):
 # load user settings using defaults if necessary
 def loadConfiguration():
     # broker
-    this.cfg_brokerAddress = tk.StringVar(value=config.get("Telemetry-BrokerAddress"))
+    this.cfg_brokerAddress = tk.StringVar(value=config.get_str("Telemetry-BrokerAddress"))
     if not cfg_brokerAddress.get():
         cfg_brokerAddress.set(DEFAULT_BROKER_ADDRESS)
-    this.cfg_brokerPort = tk.IntVar(value=config.getint("Telemetry-BrokerPort"))
+    this.cfg_brokerPort = tk.IntVar(value=config.get_int("Telemetry-BrokerPort"))
     if not cfg_brokerPort.get():
         cfg_brokerPort.set(DEFAULT_BROKER_PORT)
-    this.cfg_brokerKeepalive = tk.IntVar(value=config.getint("Telemetry-BrokerKeepalive"))
+    this.cfg_brokerKeepalive = tk.IntVar(value=config.get_int("Telemetry-BrokerKeepalive"))
     if not cfg_brokerKeepalive.get():
         cfg_brokerKeepalive.set(DEFAULT_BROKER_KEEPALIVE)
-    this.cfg_brokerQoS = tk.IntVar(value=config.getint("Telemetry-BrokerQoS"))
+    this.cfg_brokerQoS = tk.IntVar(value=config.get_int("Telemetry-BrokerQoS"))
     if cfg_brokerQoS.get() < 0 or cfg_brokerQoS.get() > 2:
         cfg_brokerQoS.set(DEFAULT_BROKER_QOS)
-    this.cfg_rootTopic = tk.StringVar(value=config.get("Telemetry-RootTopic"))
+    this.cfg_rootTopic = tk.StringVar(value=config.get_str("Telemetry-RootTopic"))
     if not cfg_rootTopic.get():
         cfg_rootTopic.set(DEFAULT_ROOT_TOPIC)
-    this.cfg_brokerUsername = tk.StringVar(value=config.get("Telemetry-BrokerUsername"))
+    this.cfg_brokerUsername = tk.StringVar(value=config.get_str("Telemetry-BrokerUsername"))
     if not cfg_brokerUsername.get():
         cfg_brokerUsername.set(DEFAULT_BROKER_USERNAME)
-    this.cfg_brokerPassword = tk.StringVar(value=config.get("Telemetry-BrokerPassword"))
+    this.cfg_brokerPassword = tk.StringVar(value=config.get_str("Telemetry-BrokerPassword"))
     if not cfg_brokerPassword.get():
         cfg_brokerPassword.set(DEFAULT_BROKER_PASSWORD)
 
     # dashboard
-    this.cfg_dashboardFormat = tk.StringVar(value=config.get("Telemetry-DashboardFormat"))
+    this.cfg_dashboardFormat = tk.StringVar(value=config.get_str("Telemetry-DashboardFormat"))
     if not cfg_dashboardFormat.get():
         cfg_dashboardFormat.set(DEFAULT_DASHBOARD_FORMAT)
-    this.cfg_dashboardTopic = tk.StringVar(value=config.get("Telemetry-DashboardTopic"))
+    this.cfg_dashboardTopic = tk.StringVar(value=config.get_str("Telemetry-DashboardTopic"))
     if not cfg_dashboardTopic.get():
         cfg_dashboardTopic.set(DEFAULT_DASHBOARD_TOPIC)
     this.cfg_dashboardFilters = {}
     this.cfg_dashboardTopics = {}
-    jsonTemp = config.get("Telemetry-DashboardFilterJSON")
+    jsonTemp = config.get_str("Telemetry-DashboardFilterJSON")
     if not jsonTemp:
         dfTemp = json.loads(DEFAULT_DASHBOARD_FILTER_JSON)
     else:
@@ -351,14 +351,14 @@ def loadConfiguration():
         this.cfg_dashboardTopics[key] = tk.StringVar(value=str(dfTemp[key][1]))
     
     # dashboard - status flags
-    this.cfg_dashboardFlagFormat = tk.StringVar(value=config.get("Telemetry-DashboardFlagFormat"))
+    this.cfg_dashboardFlagFormat = tk.StringVar(value=config.get_str("Telemetry-DashboardFlagFormat"))
     if not cfg_dashboardFlagFormat.get():
         cfg_dashboardFlagFormat.set(DEFAULT_FLAG_FORMAT)
-    this.cfg_dashboardFlagTopic = tk.StringVar(value=config.get("Telemetry-DashboardFlagTopic"))
+    this.cfg_dashboardFlagTopic = tk.StringVar(value=config.get_str("Telemetry-DashboardFlagTopic"))
     if not cfg_dashboardFlagTopic.get():
         cfg_dashboardFlagTopic.set(DEFAULT_FLAG_TOPIC)
     
-    jsonTemp = config.get("Telemetry-DashboardFlagFilterJSON")
+    jsonTemp = config.get_str("Telemetry-DashboardFlagFilterJSON")
     if not jsonTemp:
         dffTemp = json.loads(DEFAULT_FLAG_FILTER_JSON)
     else:
@@ -366,7 +366,7 @@ def loadConfiguration():
     this.cfg_dashboardFlagFilters = []
     for flag in dffTemp:
         this.cfg_dashboardFlagFilters.append(tk.IntVar(value=int(flag) and 1))
-    jsonTemp = config.get("Telemetry-DashboardFlagTopicsJSON")
+    jsonTemp = config.get_str("Telemetry-DashboardFlagTopicsJSON")
     if not jsonTemp:
         dftTemp = json.loads(DEFAULT_FLAG_TOPICS_JSON)
     else:
@@ -376,41 +376,41 @@ def loadConfiguration():
         this.cfg_dashboardFlagTopics.append(tk.StringVar(value=str(topic)))
 
     # dashboard - fuel
-    this.cfg_dashboardFuelFormat = tk.StringVar(value=config.get("Telemetry-DashboardFuelFormat"))
+    this.cfg_dashboardFuelFormat = tk.StringVar(value=config.get_str("Telemetry-DashboardFuelFormat"))
     if not cfg_dashboardFuelFormat.get():
         cfg_dashboardFuelFormat.set(DEFAULT_FUEL_FORMAT)
-    this.cfg_dashboardFuelTopic = tk.StringVar(value=config.get("Telemetry-DashboardFuelTopic"))
+    this.cfg_dashboardFuelTopic = tk.StringVar(value=config.get_str("Telemetry-DashboardFuelTopic"))
     if not cfg_dashboardFuelTopic.get():
         cfg_dashboardFuelTopic.set(DEFAULT_FUEL_TOPIC)
-    this.cfg_dashboardFuelMainTopic = tk.StringVar(value=config.get("Telemetry-DashboardFuelMainTopic"))
+    this.cfg_dashboardFuelMainTopic = tk.StringVar(value=config.get_str("Telemetry-DashboardFuelMainTopic"))
     if not cfg_dashboardFuelMainTopic.get():
         cfg_dashboardFuelMainTopic.set(DEFAULT_FUEL_MAIN_TOPIC)
-    this.cfg_dashboardFuelReservoirTopic = tk.StringVar(value=config.get("Telemetry-DashboardFuelReservoirTopic"))
+    this.cfg_dashboardFuelReservoirTopic = tk.StringVar(value=config.get_str("Telemetry-DashboardFuelReservoirTopic"))
     if not cfg_dashboardFuelReservoirTopic.get():
         cfg_dashboardFuelReservoirTopic.set(DEFAULT_FUEL_RESERVOIR_TOPIC)
 
     # dashboard - pips
-    this.cfg_dashboardPipFormat = tk.StringVar(value=config.get("Telemetry-DashboardPipFormat"))
+    this.cfg_dashboardPipFormat = tk.StringVar(value=config.get_str("Telemetry-DashboardPipFormat"))
     if not cfg_dashboardPipFormat.get():
         cfg_dashboardPipFormat.set(DEFAULT_PIP_FORMAT)
-    this.cfg_dashboardPipTopic = tk.StringVar(value=config.get("Telemetry-DashboardPipTopic"))
+    this.cfg_dashboardPipTopic = tk.StringVar(value=config.get_str("Telemetry-DashboardPipTopic"))
     if not cfg_dashboardPipTopic.get():
         cfg_dashboardPipTopic.set(DEFAULT_PIP_TOPIC)
-    this.cfg_dashboardPipSysTopic = tk.StringVar(value=config.get("Telemetry-DashboardPipSysTopic"))
+    this.cfg_dashboardPipSysTopic = tk.StringVar(value=config.get_str("Telemetry-DashboardPipSysTopic"))
     if not cfg_dashboardPipSysTopic.get():
         cfg_dashboardPipSysTopic.set(DEFAULT_PIP_SYS_TOPIC)
-    this.cfg_dashboardPipEngTopic = tk.StringVar(value=config.get("Telemetry-DashboardPipEngTopic"))
+    this.cfg_dashboardPipEngTopic = tk.StringVar(value=config.get_str("Telemetry-DashboardPipEngTopic"))
     if not cfg_dashboardPipEngTopic.get():
         cfg_dashboardPipEngTopic.set(DEFAULT_PIP_ENG_TOPIC)
-    this.cfg_dashboardPipWepTopic = tk.StringVar(value=config.get("Telemetry-DashboardPipWepTopic"))
+    this.cfg_dashboardPipWepTopic = tk.StringVar(value=config.get_str("Telemetry-DashboardPipWepTopic"))
     if not cfg_dashboardPipWepTopic.get():
         cfg_dashboardPipWepTopic.set(DEFAULT_PIP_WEP_TOPIC)
 
     # journal 
-    this.cfg_journalFormat = tk.StringVar(value=config.get("Telemetry-JournalFormat"))
+    this.cfg_journalFormat = tk.StringVar(value=config.get_str("Telemetry-JournalFormat"))
     if not cfg_journalFormat.get():
         cfg_journalFormat.set(DEFAULT_JOURNAL_FORMAT)
-    this.cfg_journalTopic = tk.StringVar(value=config.get("Telemetry-JournalTopic"))
+    this.cfg_journalTopic = tk.StringVar(value=config.get_str("Telemetry-JournalTopic"))
     if not cfg_journalTopic.get():
         cfg_journalTopic.set(DEFAULT_JOURNAL_TOPIC)
 
