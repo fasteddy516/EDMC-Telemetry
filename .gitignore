@@ -102,3 +102,6 @@ ENV/
 
 # visual studio
 .vs/
+
+# EDMC-Telemetry
+settings.json
