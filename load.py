@@ -25,7 +25,7 @@ from ttkHyperlinkLabel import HyperlinkLabel
 import paho.mqtt.client as mqtt
 import json
 
-TELEMETRY_VERSION = "0.2.2"
+TELEMETRY_VERSION = "0.2.0"
 TELEMETRY_CLIENTID = "EDMCTelemetryPlugin"
 
 # default values for initial population of configuration
