@@ -248,7 +248,7 @@ def mqttCallback_on_connect(client, userdata, flags, rc):
     this.current_location["station"] = "N/A"
     this.current_state = {}
     this.mqtt_connected = True
-    status_message(message="Online", color="lawn green", background=True)
+    status_message(message="Online", color="dark green", background=True)
     if this.status is not None and not config.shutting_down:
         this.status.event_generate("<<TelemetryStatus>>", when="tail")
 
