@@ -58,7 +58,7 @@ def plugin_start3(plugin_dir: str) -> str:
         connect_telemetry()
     else:
         logger.fatal("EDMC-Telemetry requires EDMC 5.0.0 or newer.")
-        status_message(message="ERROR", color="red")
+        status_message(message="ERROR", color="red", immediate=True)
     return "Telemetry"
 
 
@@ -70,9 +70,9 @@ def plugin_stop() -> None:
 def plugin_app(parent: tk.Frame) -> Tuple[tk.Label, tk.Label]:
     """Show broker connection status on main UI."""
     label = tk.Label(parent, text="Telemetry:")
-    this.status = tk.Label(parent, anchor=tk.W, foreground="grey", text="Initializing")
-    update_status()
-    this.status.bind_all("<<TelemetryStatus>>", update_status)
+    this.status = tk.Label(parent, anchor=tk.W, text="Initializing", foreground="grey")
+    status_message(immediate=True)
+    this.status.bind_all("<<TelemetryStatus>>", _update_status)
     return (label, this.status)
 
 
@@ -90,17 +90,20 @@ def prefs_changed(cmdr: str, is_beta: bool) -> None:
         connect_telemetry()
 
 
-def status_message(message: str = "", color: str = "", background=False) -> None:
+def status_message(message: str = "", color: str = "", immediate=False) -> None:
     """Update the status message and color to be displayed on the main UI."""
     if len(message):
         this.status_message = message
     if len(color):
         this.status_color = color
-    if not background:
-        update_status()
+    if immediate:
+        _update_status()
+    else:
+        if this.status is not None and not config.shutting_down:
+            this.status.event_generate("<<TelemetryStatus>>", when="tail")
 
 
-def update_status(event=None) -> None:
+def _update_status(event=None) -> None:
     """Post the status message to the main UI."""
     if this.status is not None:
         this.status["text"] = this.status_message
@@ -248,15 +251,11 @@ def mqttCallback_on_connect(client, userdata, flags, rc):
     this.current_location["station"] = "N/A"
     this.current_state = {}
     this.mqtt_connected = True
-    status_message(message="Online", color="dark green", background=True)
-    if this.status is not None and not config.shutting_down:
-        this.status.event_generate("<<TelemetryStatus>>", when="tail")
+    status_message(message="Online", color="dark green")
 
 
 def mqttCallback_on_disconnect(client, userdata, rc):
     """Run this callback when the connection to the broker is lost."""
     logger.info("Disconnected from MQTT Broker")
     this.mqtt_connected = False
-    status_message(message="Offline", color="orange red", background=True)
-    if this.status is not None and not config.shutting_down:
-        this.status.event_generate("<<TelemetryStatus>>", when="tail")
+    status_message(message="Offline", color="orange red")
