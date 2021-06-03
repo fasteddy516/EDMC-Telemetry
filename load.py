@@ -206,6 +206,7 @@ def journal_entry(
 
 def connect_telemetry() -> None:
     """Establish a connection with the MQTT broker."""
+    status_message(message="Connecting", color="steel blue")
     this.mqtt.reinitialise(client_id=this.settings.client_id)
     this.mqtt.on_connect = mqttCallback_on_connect
     this.mqtt.on_disconnect = mqttCallback_on_disconnect
@@ -220,6 +221,7 @@ def connect_telemetry() -> None:
 
 def disconnect_telemetry() -> None:
     """Break connection to the MQTT broker."""
+    status_message(message="Disconnecting", color="steel blue")
     this.mqtt.loop_stop()
     this.mqtt.disconnect()
     start = time.monotonic()
