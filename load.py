@@ -40,6 +40,7 @@ class Globals:
         self.status: Optional[tk.Label] = None
         self.status_message: str = "Initializing"
         self.status_color: str = "grey"
+        self.modifying_preferences = False
         self.mqtt_connected: bool = False
         self.current_db = {}
         self.current_location = {"system": "N/A", "station": "N/A"}
@@ -71,13 +72,14 @@ def plugin_app(parent: tk.Frame) -> Tuple[tk.Label, tk.Label]:
     """Show broker connection status on main UI."""
     label = tk.Label(parent, text="Telemetry:")
     this.status = tk.Label(parent, anchor=tk.W, text="Initializing", foreground="grey")
-    status_message(immediate=True)
     this.status.bind_all("<<TelemetryStatus>>", _update_status)
+    status_message(immediate=True)
     return (label, this.status)
 
 
 def plugin_prefs(parent: nb.Notebook, cmdr: str, is_beta: bool) -> Optional[tk.Frame]:
     """Allow configuration to be modified from UI."""
+    this.modifying_preferences = True
     return this.settings.show_preferences(parent)
 
 
@@ -88,6 +90,8 @@ def prefs_changed(cmdr: str, is_beta: bool) -> None:
         logger.info("MQTT broker settings modified, connection will now restart.")
         disconnect_telemetry()
         connect_telemetry()
+    this.modifying_preferences = False
+    status_message(immediate=True)
 
 
 def status_message(message: str = "", color: str = "", immediate=False) -> None:
@@ -99,7 +103,11 @@ def status_message(message: str = "", color: str = "", immediate=False) -> None:
     if immediate:
         _update_status()
     else:
-        if this.status is not None and not config.shutting_down:
+        if (
+            this.status is not None
+            and not config.shutting_down
+            and not this.modifying_preferences
+        ):
             this.status.event_generate("<<TelemetryStatus>>", when="tail")
 
 
@@ -225,14 +233,15 @@ def connect_telemetry() -> None:
 def disconnect_telemetry() -> None:
     """Break connection to the MQTT broker."""
     status_message(message="Disconnecting", color="steel blue")
+    if this.mqtt_connected:
+        this.mqtt.disconnect()
+        start = time.monotonic()
+        while this.mqtt_connected:
+            time.sleep(0.1)
+            if (time.monotonic() - start) >= 5.0:
+                logger.error("Timeout waiting for MQTT to disconnect.")
+                break
     this.mqtt.loop_stop()
-    this.mqtt.disconnect()
-    start = time.monotonic()
-    while this.mqtt_connected:
-        time.sleep(0.1)
-        if (time.monotonic() - start) >= 5.0:
-            logger.error("Timeout waiting for MQTT to disconnect.")
-            break
 
 
 def publish(topic: str, payload: str):
