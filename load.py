@@ -58,7 +58,7 @@ def plugin_start3(plugin_dir: str) -> str:
         connect_telemetry()
     else:
         logger.fatal("EDMC-Telemetry requires EDMC 5.0.0 or newer.")
-        status_message(message="ERROR", color="red", immediate=True)
+        status_message(message="ERROR: EDMC < 5.0.0", color="red", immediate=True)
     return "Telemetry"
 
 
