@@ -53,7 +53,9 @@ After installing the plugin, it can be configured using the "Telemetry" tab in E
   
 * **Password**: Password for authentication with MQTT broker. _(leave blank if not required)_
 
-* **Root Topic**: Root topic for all MQTT messages from EDMC-Telemetry _(default=Telemetry)_
+* **Client ID**: MQTT client ID used when connecting to the broker.  If you have multiple instances of EDMC-Telemetry connecting to the same broker, this value will have to be unique for each instance.  _(default=EDMCTelemetryClient)_
+
+* **Root Topic**: Root topic for all MQTT messages from EDMC-Telemetry.  You can include multiple topic levels here, so something like `Telemetry/CMDR1` is valid if needed. _(default=Telemetry)_
 
 * **Convert all topics to lowercase**: If you don't like capital letters in your MQTT topics, enable this option. _(default=unchecked)_
   
