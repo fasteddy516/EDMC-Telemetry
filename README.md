@@ -134,6 +134,8 @@ MQTT topics can be modified by changing the corresponding entry in the `topics` 
 
 * Avoid doing silly things like specifying the same topic for multiple items.  This will technically work, but likely won't be very useful.
 
+* Remember to restart EDMC after making any changes.  The JSON configuration is only loaded once, when EDMC starts.
+
 * Don't mess with the other (not topic-related) settings.  Everything else is configurable via the EDMC settings UI, and modifying them here to values that the plugin isn't expecting will just prevent it from running.  
 
 _If you happen to mess up the configuration file and can't figure out how to fix it, just delete or rename it.  A new, default file will be generated the next time you start EDMC._
