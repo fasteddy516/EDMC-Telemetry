@@ -207,7 +207,7 @@ def journal_entry(
     if this.settings.journal_format == "Raw":
         data = entry
     else:
-        topic = f"{topic}/{entry['event']}"
+        topic = f"{topic}/{this.settings.topic(entry['event'])}"
         data = entry.copy()
         del data["event"]
         del data["timestamp"]
