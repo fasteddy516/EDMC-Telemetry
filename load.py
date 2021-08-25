@@ -15,15 +15,15 @@ import time
 import tkinter as tk
 from typing import Any, Dict, Optional, Tuple
 
-import myNotebook as nb
-import semantic_version
-from config import appname, appversion, config
+import myNotebook as nb  # type: ignore (provided by EDMC)
+import semantic_version  # type: ignore (provided by EDMC)
+from config import appname, appversion, config  # type: ignore (provided by EDMC)
 
 import paho.mqtt.client as mqtt_client
 from settings import Settings
 
 # plugin constants
-TELEMETRY_VERSION = "0.3.0"
+TELEMETRY_VERSION = "0.3.9"
 TELEMETRY_PIPS = ("sys", "eng", "wep")
 
 
@@ -222,6 +222,17 @@ def connect_telemetry() -> None:
     this.mqtt.on_connect = mqttCallback_on_connect
     this.mqtt.on_disconnect = mqttCallback_on_disconnect
     this.mqtt.username_pw_set(this.settings.username, this.settings.password)
+    if this.settings.encryption:
+        try:
+            this.mqtt.tls_set(
+                ca_certs=this.settings.ca_certs,
+                certfile=this.settings.certfile,
+                keyfile=this.settings.keyfile,
+            )
+            this.mqtt.tls_insecure_set(this.settings.tls_insecure)
+        except Exception as e:
+            logger.error(f"Error configuring TLS: {e}")
+
     this.mqtt.connect_async(
         this.settings.broker,
         this.settings.port,

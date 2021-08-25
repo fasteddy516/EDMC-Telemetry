@@ -5,11 +5,11 @@ import json
 import logging
 import tkinter as tk
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
-import myNotebook as nb
-import semantic_version
-from ttkHyperlinkLabel import HyperlinkLabel
+import myNotebook as nb  # type: ignore (provided by EDMC)
+import semantic_version  # type: ignore (provided by EDMC)
+from ttkHyperlinkLabel import HyperlinkLabel  # type: ignore (provided by EDMC)
 
 from paho.mqtt import __version__ as mqtt_version
 
@@ -33,6 +33,11 @@ class Settings:
         "username": "",
         "password": "",
         "client_id": "EDMCTelemetryPlugin",
+        "encryption": False,
+        "ca_certs": "",
+        "certfile": "",
+        "keyfile": "",
+        "tls_insecure": False,
         "dashboard": True,
         "dashboard_format": "Processed",
         "journal": True,
@@ -139,6 +144,65 @@ class Settings:
     def client_id(self, new_value: str) -> None:
         self._options["client_id"] = new_value
         self._client_id_tk.set(new_value)
+
+    @property
+    def encryption(self) -> bool:
+        """Determine if TLS/SSL connection to the MQTT broker should be used."""
+        return self._options["encryption"]
+
+    @encryption.setter
+    def encryption(self, new_value: bool) -> None:
+        self._options["encryption"] = new_value
+        self._encryption_tk.set(new_value)
+
+    @property
+    def ca_certs(self) -> Union[str, None]:
+        """Return a string path to trusted CA certificate files."""
+        if len(self._options["ca_certs"]):
+            return self._options["ca_certs"]
+        else:
+            return None
+
+    @ca_certs.setter
+    def ca_certs(self, new_value: str) -> None:
+        self._options["ca_certs"] = new_value
+        self._ca_certs_tk.set(new_value)
+
+    @property
+    def certfile(self) -> Union[str, None]:
+        """Return a string path to the client certificate used for authentication."""
+        if len(self._options["certfile"]):
+            return self._options["certfile"]
+        else:
+            return None
+
+    @certfile.setter
+    def certfile(self, new_value: str) -> None:
+        self._options["certfile"] = new_value
+        self._certfile_tk.set(new_value)
+
+    @property
+    def keyfile(self) -> Union[str, None]:
+        """Return a string path to the client private key used for authentication."""
+        if len(self._options["keyfile"]):
+            return self._options["keyfile"]
+        else:
+            return None
+
+    @keyfile.setter
+    def keyfile(self, new_value: str) -> None:
+        self._options["keyfile"] = new_value
+        self._keyfile_tk.set(new_value)
+
+    @property
+    def tls_insecure(self) -> bool:
+        """If enabled, server identity verification will be bypassed."""
+        return self._options["tls_insecure"]
+
+    @tls_insecure.setter
+    def tls_insecure(self, new_value: bool) -> None:
+        self._options["tls_insecure"] = new_value
+        self._tls_insecure_tk.set(new_value)
 
     @property
     def root_topic(self) -> str:
@@ -268,6 +332,11 @@ class Settings:
         self._username_tk = tk.StringVar(value=self.username)
         self._password_tk = tk.StringVar(value=self.password)
         self._client_id_tk = tk.StringVar(value=self.client_id)
+        self._encryption_tk = tk.BooleanVar(value=self.encryption)
+        self._ca_certs_tk = tk.StringVar(value=self.ca_certs)
+        self._certfile_tk = tk.StringVar(value=self.certfile)
+        self._keyfile_tk = tk.StringVar(value=self.keyfile)
+        self._tls_insecure_tk = tk.BooleanVar(value=self.tls_insecure)
         self._dashboard_tk = tk.BooleanVar(value=self.dashboard)
         self._dashboard_format_tk = tk.StringVar(value=self.dashboard_format)
         self._journal_tk = tk.BooleanVar(value=self.journal)
