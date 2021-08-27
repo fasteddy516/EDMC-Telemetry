@@ -222,8 +222,8 @@ def connect_telemetry() -> None:
     this.mqtt.on_connect = mqttCallback_on_connect
     this.mqtt.on_disconnect = mqttCallback_on_disconnect
     this.mqtt.username_pw_set(this.settings.username, this.settings.password)
-    if this.settings.encryption:
-        try:
+    try:
+        if this.settings.encryption:
             ca_certs_arg = (
                 this.settings.ca_certs if len(this.settings.ca_certs) else None
             )
@@ -237,15 +237,17 @@ def connect_telemetry() -> None:
                 keyfile=keyfile_arg,
             )
             this.mqtt.tls_insecure_set(this.settings.tls_insecure)
-        except Exception as e:
-            logger.error(f"Error configuring TLS: {e}")
 
-    this.mqtt.connect_async(
-        this.settings.broker,
-        this.settings.port,
-        this.settings.keepalive,
-    )
-    this.mqtt.loop_start()
+        this.mqtt.connect_async(
+            this.settings.broker,
+            this.settings.port,
+            this.settings.keepalive,
+        )
+        this.mqtt.loop_start()
+
+    except Exception as e:
+        status_message(message="CONFIG ERROR", color="red")
+        logger.error(f"MQTT configuration error - check your connection settings. {e}")
 
 
 def disconnect_telemetry() -> None:
