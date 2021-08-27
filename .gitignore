@@ -105,3 +105,4 @@ ENV/
 
 # EDMC-Telemetry
 settings.json
+*.pem

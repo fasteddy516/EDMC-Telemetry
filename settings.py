@@ -5,6 +5,7 @@ import json
 import logging
 import tkinter as tk
 from pathlib import Path
+from tkinter import ttk
 from typing import Any, Union
 
 import myNotebook as nb  # type: ignore (provided by EDMC)
@@ -407,72 +408,159 @@ class Settings:
 
     def show_preferences(self, parent: nb.Notebook) -> tk.Frame:
         """Display preferences tab in UI."""
+        # set up the primary frame for our assigned notebook tab
+        frame = nb.Frame(parent)
+        frame.columnconfigure(1, weight=1)
+        frame.rowconfigure(1, weight=1)
+
+        # create a style that will be used for telemetry's settings notebook
+        style = ttk.Style()
+        style.configure("TNB.TNotebook", background=nb.Label().cget("background"))
+        style.configure("TNB.TLabelFrame", background=nb.Label().cget("background"))
         PADX = 10
         PADY = 2
 
-        frame = nb.Frame(parent)
+        # add our own notebook to hold all the telemetry options
+        tnb = ttk.Notebook(frame, style="TNB.TNotebook")
+        tnb.grid(columnspan=2, padx=8, sticky=tk.NSEW)
+        tnb.columnconfigure(1, weight=1)
+
+        # broker connection settings
+        tnb_comm = nb.Frame(tnb)
+        tnb_comm.columnconfigure(1, weight=1)
         row = 0
+
+        row += 1
+        nb.Label(tnb_comm, text="[Required Settings]").grid(
+            padx=PADX, row=row, sticky=tk.W
+        )
 
         # mqtt broker address
         row += 1
-        nb.Label(frame, text="Broker Address").grid(padx=PADX, row=row, sticky=tk.W)
-        nb.Entry(frame, textvariable=self._broker_tk).grid(
+        nb.Label(tnb_comm, text="Broker Address:").grid(padx=PADX, row=row, sticky=tk.E)
+        nb.Entry(tnb_comm, textvariable=self._broker_tk).grid(
             padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
         )
 
         # mqtt broker port
         row += 1
-        nb.Label(frame, text="Port").grid(padx=PADX, row=row, sticky=tk.W)
-        nb.Entry(frame, textvariable=self._port_tk).grid(
-            padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
-        )
-
-        # mqtt broker keepalive
-        row += 1
-        nb.Label(frame, text="Keepalive").grid(padx=PADX, row=row, sticky=tk.W)
-        nb.Entry(frame, textvariable=self._keepalive_tk).grid(
+        nb.Label(tnb_comm, text="Port:").grid(padx=PADX, row=row, sticky=tk.E)
+        nb.Entry(tnb_comm, textvariable=self._port_tk).grid(
             padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
         )
 
         # mqtt qos
         row += 1
-        nb.Label(frame, text="QoS").grid(padx=PADX, row=row, sticky=tk.W)
-        nb.OptionMenu(frame, self._qos_tk, self._qos_tk.get(), 0, 1, 2).grid(
+        nb.Label(tnb_comm, text="QoS:").grid(padx=PADX, row=row, sticky=tk.E)
+        nb.OptionMenu(tnb_comm, self._qos_tk, self._qos_tk.get(), 0, 1, 2).grid(
             padx=PADX, pady=PADY, row=row, column=1, sticky=tk.W
         )
 
-        # mqtt username
+        # mqtt broker keepalive
         row += 1
-        nb.Label(frame, text="Username").grid(padx=PADX, row=row, sticky=tk.W)
-        nb.Entry(frame, textvariable=self._username_tk).grid(
-            padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
-        )
-
-        # mqtt password
-        row += 1
-        nb.Label(frame, text="Password").grid(padx=PADX, row=row, sticky=tk.W)
-        nb.Entry(frame, textvariable=self._password_tk).grid(
+        nb.Label(tnb_comm, text="Keepalive:").grid(padx=PADX, row=row, sticky=tk.E)
+        nb.Entry(tnb_comm, textvariable=self._keepalive_tk).grid(
             padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
         )
 
         # mqtt client id
         row += 1
-        nb.Label(frame, text="Client ID").grid(padx=PADX, row=row, sticky=tk.W)
-        nb.Entry(frame, textvariable=self._client_id_tk).grid(
+        nb.Label(tnb_comm, text="Client ID:").grid(padx=PADX, row=row, sticky=tk.E)
+        nb.Entry(tnb_comm, textvariable=self._client_id_tk).grid(
             padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
         )
 
+        # broker auth settings
+        row += 1
+        ttk.Separator(tnb_comm, orient=tk.HORIZONTAL).grid(
+            columnspan=4, padx=PADX, pady=PADY * 4, sticky=tk.EW, row=row
+        )
+        row += 1
+        nb.Label(tnb_comm, text="[Authentication]").grid(
+            padx=PADX, row=row, sticky=tk.W
+        )
+
+        # mqtt username
+        row += 1
+        nb.Label(tnb_comm, text="Username:").grid(padx=PADX, row=row, sticky=tk.E)
+        nb.Entry(tnb_comm, textvariable=self._username_tk).grid(
+            padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
+        )
+
+        # mqtt password
+        row += 1
+        nb.Label(tnb_comm, text="Password:").grid(padx=PADX, row=row, sticky=tk.E)
+        nb.Entry(tnb_comm, textvariable=self._password_tk).grid(
+            padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
+        )
+
+        # broker encryption settings
+        row += 1
+        ttk.Separator(tnb_comm, orient=tk.HORIZONTAL).grid(
+            columnspan=4, padx=PADX, pady=PADY * 4, sticky=tk.EW, row=row
+        )
+        row += 1
+        nb.Label(tnb_comm, text="[Encryption]").grid(padx=PADX, row=row, sticky=tk.W)
+
+        # encryption
+        row += 1
+        nb.Checkbutton(
+            tnb_comm,
+            text="Encrypted Connection",
+            variable=self._encryption_tk,
+            command="",
+        ).grid(padx=PADX, row=row, column=1, sticky=tk.W)
+
+        # skip validation
+        row += 1
+        nb.Checkbutton(
+            tnb_comm,
+            text="Skip Certificate Verification",
+            variable=self._tls_insecure_tk,
+            command="",
+        ).grid(padx=PADX, row=row, column=1, sticky=tk.W)
+
+        # server ca certificate
+        row += 1
+        nb.Label(tnb_comm, text="Server Certificate (CA)").grid(
+            padx=PADX, row=row, sticky=tk.E
+        )
+        nb.Entry(tnb_comm, textvariable=self._ca_certs_tk).grid(
+            padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
+        )
+
+        # client certificate
+        row += 1
+        nb.Label(tnb_comm, text="Client Certificate").grid(
+            padx=PADX, row=row, sticky=tk.E
+        )
+        nb.Entry(tnb_comm, textvariable=self._certfile_tk).grid(
+            padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
+        )
+
+        # client key
+        row += 1
+        nb.Label(tnb_comm, text="Client Key").grid(padx=PADX, row=row, sticky=tk.E)
+        nb.Entry(tnb_comm, textvariable=self._keyfile_tk).grid(
+            padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
+        )
+
+        # topic settings
+        tnb_data = nb.Frame(tnb)
+        tnb_data.columnconfigure(1, weight=1)
+        row = 0
+
         # mqtt root topic
         row += 1
-        nb.Label(frame, text="Root Topic").grid(padx=PADX, row=row, sticky=tk.W)
-        nb.Entry(frame, textvariable=self._root_topic_tk).grid(
+        nb.Label(tnb_data, text="Root Topic").grid(padx=PADX, row=row, sticky=tk.W)
+        nb.Entry(tnb_data, textvariable=self._root_topic_tk).grid(
             padx=PADX, pady=PADY, row=row, column=1, sticky=tk.EW
         )
 
         # lowercase topics
         row += 1
         nb.Checkbutton(
-            frame,
+            tnb_data,
             text="Convert all topics to lowercase",
             variable=self._lowercase_topics_tk,
             command="",
@@ -481,13 +569,13 @@ class Settings:
         # dashboard
         row += 1
         nb.Checkbutton(
-            frame,
+            tnb_data,
             text="Publish Dashboard",
             variable=self._dashboard_tk,
             command="",
         ).grid(padx=PADX, row=row, sticky=tk.W)
         nb.OptionMenu(
-            frame,
+            tnb_data,
             self._dashboard_format_tk,
             self._dashboard_format_tk.get(),
             "Raw",
@@ -497,13 +585,13 @@ class Settings:
         # journal
         row += 1
         nb.Checkbutton(
-            frame,
+            tnb_data,
             text="Publish Journal",
             variable=self._journal_tk,
             command="",
         ).grid(padx=PADX, row=row, sticky=tk.W)
         nb.OptionMenu(
-            frame,
+            tnb_data,
             self._journal_format_tk,
             self._journal_format_tk.get(),
             "Raw",
@@ -513,7 +601,7 @@ class Settings:
         # location
         row += 1
         nb.Checkbutton(
-            frame,
+            tnb_data,
             text="Publish Current System/Station",
             variable=self._location_tk,
             command="",
@@ -522,36 +610,38 @@ class Settings:
         # state
         row += 1
         nb.Checkbutton(
-            frame,
+            tnb_data,
             text="Publish EDMC State Tracking",
             variable=self._state_tk,
             command="",
         ).grid(padx=PADX, row=row, sticky=tk.W)
 
+        # add the preferences tabs we've created to our assigned EDMC settings tab
+        tnb.add(tnb_comm, text="Connection")
+        tnb.add(tnb_data, text="Data")
+
         # plugin link and version
-        row += 1
         HyperlinkLabel(
             frame,
             text="https://github.com/fasteddy516/EDMC-Telemetry/",
             background=nb.Label().cget("background"),
             url="https://github.com/fasteddy516/EDMC-Telemetry/",
             underline=True,
-        ).grid(padx=PADX, pady=(1, 4), row=row, column=0, sticky=tk.W)
+        ).grid(padx=PADX, pady=(1, 4), row=2, column=0, sticky=tk.W)
         nb.Label(frame, text=f"Plugin Version {self.plugin_version}").grid(
-            padx=PADX, pady=(1, 4), row=row, column=1, sticky=tk.E
+            padx=PADX, pady=(1, 4), row=2, column=1, sticky=tk.E
         )
 
         # mqtt link and version
-        row += 1
         HyperlinkLabel(
             frame,
             text="https://github.com/eclipse/paho.mqtt.python/",
             background=nb.Label().cget("background"),
             url="https://github.com/eclipse/paho.mqtt.python",
             underline=True,
-        ).grid(padx=PADX, pady=(1, 4), row=row, column=0, sticky=tk.W)
+        ).grid(padx=PADX, pady=(1, 4), row=3, column=0, sticky=tk.W)
         nb.Label(frame, text=f"MQTT Version {mqtt_version}").grid(
-            padx=PADX, pady=(1, 4), row=row, column=1, sticky=tk.E
+            padx=PADX, pady=(1, 4), row=3, column=1, sticky=tk.E
         )
 
         return frame
@@ -583,6 +673,38 @@ class Settings:
 
         if self.client_id != self._client_id_tk.get():
             self.client_id = self._client_id_tk.get()
+            reset_connection = True
+
+        if self.encryption != self._encryption_tk.get():
+            self.encryption = self._encryption_tk.get()
+            reset_connection = True
+
+        if (
+            self.ca_certs is None
+            and len(self._ca_certs_tk.get())
+            or self.ca_certs != self._ca_certs_tk.get()
+        ):
+            self.ca_certs = self._ca_certs_tk.get()
+            reset_connection = True
+
+        if (
+            self.certfile is None
+            and len(self._certfile_tk.get())
+            or self.certfile != self._certfile_tk.get()
+        ):
+            self.certfile = self._certfile_tk.get()
+            reset_connection = True
+
+        if (
+            self.keyfile is None
+            and len(self._keyfile_tk.get())
+            or self.keyfile != self._keyfile_tk.get()
+        ):
+            self.keyfile = self._keyfile_tk.get()
+            reset_connection = True
+
+        if self.tls_insecure != self._tls_insecure_tk.get():
+            self.tls_insecure = self._tls_insecure_tk.get()
             reset_connection = True
 
         # The rest of these options can be adjusted on-the-fly while connected.
