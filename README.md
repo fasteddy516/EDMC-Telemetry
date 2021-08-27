@@ -25,7 +25,7 @@ _For a detailed list of the status and events that are available, please see the
 
 ## Limitations
 
-EDMC-Telemetry publishes messages using MQTT v3.1.1 through raw TCP with no encryption.  WebSockets and SSL/TLS encryption are not supported.
+EDMC-Telemetry publishes messages using MQTT v3.1.1 through raw TCP.  WebSockets connections are not supported.
 
   
 ## Installation
@@ -39,21 +39,41 @@ EDMC-Telemetry publishes messages using MQTT v3.1.1 through raw TCP with no encr
 
 ## Configuration
 
-After installing the plugin, it can be configured using the "Telemetry" tab in EDMC's "settings" dialog.  The following options are available:
+After installing the plugin, it can be configured using the "Telemetry" tab in EDMC's "settings" dialog.  The following options are available in two separate sub-tabs, *Connection* and *Data*:
+
+### Connection Tab:
+
+**[Required Settings]**
 
 * **Broker Address**: IP Address / hostname of MQTT broker. _(default=127.0.0.1)_
 
 * **Port**: TCP/IP port used by MQTT broker _(default=1883)_
 
-* **Keepalive**: MQTT keepalive in seconds _(default=60)_
-  
 * **QoS**: MQTT QoS setting _(0=at most once, 1=at least once, 2=exactly once, default=0)_
-  
+
+* **Keepalive**: MQTT keepalive in seconds _(default=60)_
+
+* **Client ID**: MQTT client ID used when connecting to the broker.  If you have multiple instances of EDMC-Telemetry connecting to the same broker, this value will have to be unique for each instance.  _(default=EDMCTelemetryClient)_
+
+**[Authentication]**
+
 * **Username**: Username for authentication with MQTT broker. _(leave blank if not required)_
   
 * **Password**: Password for authentication with MQTT broker. _(leave blank if not required)_
 
-* **Client ID**: MQTT client ID used when connecting to the broker.  If you have multiple instances of EDMC-Telemetry connecting to the same broker, this value will have to be unique for each instance.  _(default=EDMCTelemetryClient)_
+**[Encryption]**
+
+* **Encrypted Connection**: Enable this option to use SSL/TLS encryption for the connection to the MQTT broker.  _Enabling this option likely requires the port setting to be changed - 8883 is the standard for encrypted MQTT connections, but your broker may be configured differently._
+
+* **Skip Certificate Verification**: Enable this option to disable verification of the server hostname in the server certificate.  This can be useful for testing, and when using a dedicated broker on your local network, but it makes using encryption virtually pointless, as it makes it impossible to guarantee that the broker you are connecting to is not a malicious 3rd party device impersonating your actual broker.  **_This option should absolutely not be used for connections to brokers outside of your own local network._**
+
+* **Server Certificate (CA)**: The absolute (full) path to the Certificate Authority certificate file for the server (broker).  If your broker certificate is signed by a CA that is already trusted by your Operating System (i.e. Let's Encrypt, Verisign, etc.) then you should be able to leave this blank.
+
+* **Client Certificate**: The absolute (full) path to the PEM encoded client certificate.  _Only required if using TLS-based authentication._
+
+* **Client Key**: The absolute (full) path to the PEM encoded client private key.  _Only required if using TLS-based authentication._
+
+### Data Tab:
 
 * **Root Topic**: Root topic for all MQTT messages from EDMC-Telemetry.  You can include multiple topic levels here, so something like `Telemetry/CMDR1` is valid if needed. _(default=Telemetry)_
 
@@ -84,6 +104,15 @@ After installing the plugin, it can be configured using the "Telemetry" tab in E
 * **Publish EDMC State Tracking**: Use the checkbox to enable/disable publishing of EDMC's internal `state` to `Telemetry/Location/State`.  **Note that this generates an almost continuous stream of very large MQTT messages which may bog down your MQTT setup - enabling this option is generally unnecessary and not recommended.**  _(default=unchecked)_
 
 
+## Telemetry Status Topics
+
+Two topics are provided by EDMC-Telemetry to help determine the current state of the telemetry plugin as well as the Elite Dangerous game state.
+
+* **Telemetry/FeedActive**: `True` when the MQTT connection to the broker is active, `False` otherwise.  This topic is published with the `retain` flag set to True, and is also specified as the _Last Will and Testament_ for the MQTT client, so it should always be available on the broker and reflect the state of the connection.
+
+* **Telemetry/GameRunning**: `True` when EDMC believes Elite Dangerous is running, `False` otherwise.
+
+
 ## Custom MQTT Topics
 
 All of EDMC-Telemetry's configuration settings are stored in the `settings.json` file located in the same folder as the plugin.  (This file gets generated with default settings the first time you run EDMC after installing the plugin.)  If you want to customize the MQTT topics that EDMC-Telemetry publishes to, you can do so by editing this file.  
@@ -92,7 +121,7 @@ The default configuration looks like this:
 
 ```json
 {
-    "version": "0.3.0",
+    "version": "0.4.0",
     "broker": "127.0.0.1",
     "port": 1883,
     "keepalive": 60,
@@ -100,6 +129,11 @@ The default configuration looks like this:
     "username": "",
     "password": "",
     "client_id": "EDMCTelemetryPlugin",
+    "encryption": false,
+    "ca_certs": "",
+    "certfile": "",
+    "keyfile": "",
+    "tls_insecure": false,
     "dashboard": true,
     "dashboard_format": "Processed",
     "journal": true,
@@ -109,6 +143,8 @@ The default configuration looks like this:
     "lowercase_topics": false,
     "topics": {
         "root": "Telemetry",
+        "gamerunning": "GameRunning",
+        "feedactive": "FeedActive",
         "dashboard": "Dashboard",
         "journal": "Journal",
         "location": "Location",
