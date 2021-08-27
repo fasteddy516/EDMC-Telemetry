@@ -49,12 +49,6 @@ class Globals:
         self.current_state = {}
         self.settings = Settings(TELEMETRY_VERSION, logger)
         self.mqtt = mqtt_client.Client()
-        self.feed_topic = (
-            f"{self.settings.topic('root')}/{self.settings.topic('feedactive')}"
-        )
-        self.game_topic = (
-            f"{self.settings.topic('root')}/{self.settings.topic('gamerunning')}"
-        )
 
 
 this = Globals()
@@ -208,7 +202,10 @@ def journal_entry(
             this.current_state = state.copy()
 
     if str(entry["event"]).lower() in GAME_STATE_EVENTS:
-        publish(topic=this.game_topic, payload=str(monitor.game_running()))
+        publish(
+            topic=this.settings.topic("gamerunning"),
+            payload=str(monitor.game_running()),
+        )
 
     if not this.settings.journal:
         return
@@ -233,7 +230,12 @@ def connect_telemetry() -> None:
     this.mqtt.on_connect = mqttCallback_on_connect
     this.mqtt.on_disconnect = mqttCallback_on_disconnect
     this.mqtt.username_pw_set(this.settings.username, this.settings.password)
-    this.mqtt.will_set(topic=this.feed_topic, payload="False", qos=0, retain=True)
+    this.mqtt.will_set(
+        topic=f"{this.settings.topic('root')}/{this.settings.topic('feedactive')}",
+        payload="False",
+        qos=0,
+        retain=True,
+    )
     try:
         if this.settings.encryption:
             ca_certs_arg = (
@@ -266,7 +268,7 @@ def disconnect_telemetry() -> None:
     """Break connection to the MQTT broker."""
     status_message(message="Disconnecting", color="steel blue")
     if this.mqtt_connected:
-        publish(topic=this.feed_topic, payload="False", retain=True)
+        publish(topic=this.settings.topic("feedactive"), payload="False", retain=True)
         time.sleep(0.5)
         this.mqtt.disconnect()
         start = time.monotonic()
@@ -296,8 +298,10 @@ def mqttCallback_on_connect(client, userdata, flags, rc):
         logger.info("Connected to MQTT Broker")
     this.mqtt_connected = True
     status_message(message="Online", color="dark green")
-    publish(topic=this.feed_topic, payload="True", retain=True)
-    publish(topic=this.game_topic, payload=str(monitor.game_running()))
+    publish(topic=this.settings.topic("feedactive"), payload="True", retain=True)
+    publish(
+        topic=this.settings.topic("gamerunning"), payload=str(monitor.game_running())
+    )
 
 
 def mqttCallback_on_disconnect(client, userdata, rc):
