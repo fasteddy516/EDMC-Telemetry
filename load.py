@@ -272,17 +272,19 @@ def publish(topic: str, payload: str):
 
 def mqttCallback_on_connect(client, userdata, flags, rc):
     """Run this callback when connection to a broker is established."""
-    logger.info("Connected to MQTT Broker")
     this.current_db = {}
     this.current_location["system"] = "N/A"
     this.current_location["station"] = "N/A"
     this.current_state = {}
+    if this.mqtt_connected is False:
+        logger.info("Connected to MQTT Broker")
     this.mqtt_connected = True
     status_message(message="Online", color="dark green")
 
 
 def mqttCallback_on_disconnect(client, userdata, rc):
     """Run this callback when the connection to the broker is lost."""
-    logger.info("Disconnected from MQTT Broker")
+    if this.mqtt_connected is True:
+        logger.info("Disconnected from MQTT Broker")
     this.mqtt_connected = False
     status_message(message="Offline", color="orange red")
