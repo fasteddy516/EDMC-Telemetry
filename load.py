@@ -224,10 +224,17 @@ def connect_telemetry() -> None:
     this.mqtt.username_pw_set(this.settings.username, this.settings.password)
     if this.settings.encryption:
         try:
+            ca_certs_arg = (
+                this.settings.ca_certs if len(this.settings.ca_certs) else None
+            )
+            certfile_arg = (
+                this.settings.certfile if len(this.settings.certfile) else None
+            )
+            keyfile_arg = this.settings.keyfile if len(this.settings.keyfile) else None
             this.mqtt.tls_set(
-                ca_certs=this.settings.ca_certs,
-                certfile=this.settings.certfile,
-                keyfile=this.settings.keyfile,
+                ca_certs=ca_certs_arg,
+                certfile=certfile_arg,
+                keyfile=keyfile_arg,
             )
             this.mqtt.tls_insecure_set(this.settings.tls_insecure)
         except Exception as e:

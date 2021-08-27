@@ -6,7 +6,7 @@ import logging
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
-from typing import Any, Union
+from typing import Any
 
 import myNotebook as nb  # type: ignore (provided by EDMC)
 import semantic_version  # type: ignore (provided by EDMC)
@@ -157,12 +157,9 @@ class Settings:
         self._encryption_tk.set(new_value)
 
     @property
-    def ca_certs(self) -> Union[str, None]:
+    def ca_certs(self) -> str:
         """Return a string path to trusted CA certificate files."""
-        if len(self._options["ca_certs"]):
-            return self._options["ca_certs"]
-        else:
-            return None
+        return self._options["ca_certs"]
 
     @ca_certs.setter
     def ca_certs(self, new_value: str) -> None:
@@ -170,12 +167,9 @@ class Settings:
         self._ca_certs_tk.set(new_value)
 
     @property
-    def certfile(self) -> Union[str, None]:
+    def certfile(self) -> str:
         """Return a string path to the client certificate used for authentication."""
-        if len(self._options["certfile"]):
-            return self._options["certfile"]
-        else:
-            return None
+        return self._options["certfile"]
 
     @certfile.setter
     def certfile(self, new_value: str) -> None:
@@ -183,12 +177,9 @@ class Settings:
         self._certfile_tk.set(new_value)
 
     @property
-    def keyfile(self) -> Union[str, None]:
+    def keyfile(self) -> str:
         """Return a string path to the client private key used for authentication."""
-        if len(self._options["keyfile"]):
-            return self._options["keyfile"]
-        else:
-            return None
+        return self._options["keyfile"]
 
     @keyfile.setter
     def keyfile(self, new_value: str) -> None:
@@ -679,27 +670,15 @@ class Settings:
             self.encryption = self._encryption_tk.get()
             reset_connection = True
 
-        if (
-            self.ca_certs is None
-            and len(self._ca_certs_tk.get())
-            or self.ca_certs != self._ca_certs_tk.get()
-        ):
+        if self.ca_certs != self._ca_certs_tk.get():
             self.ca_certs = self._ca_certs_tk.get()
             reset_connection = True
 
-        if (
-            self.certfile is None
-            and len(self._certfile_tk.get())
-            or self.certfile != self._certfile_tk.get()
-        ):
+        if self.certfile != self._certfile_tk.get():
             self.certfile = self._certfile_tk.get()
             reset_connection = True
 
-        if (
-            self.keyfile is None
-            and len(self._keyfile_tk.get())
-            or self.keyfile != self._keyfile_tk.get()
-        ):
+        if self.keyfile != self._keyfile_tk.get():
             self.keyfile = self._keyfile_tk.get()
             reset_connection = True
 
