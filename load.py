@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional, Tuple
 import myNotebook as nb  # type: ignore (provided by EDMC)
 import semantic_version  # type: ignore (provided by EDMC)
 from config import appname, appversion, config  # type: ignore (provided by EDMC)
+from monitor import monitor  # type: ignore (provided by EDMC)
 
 import paho.mqtt.client as mqtt_client
 from settings import Settings
@@ -25,6 +26,7 @@ from settings import Settings
 # plugin constants
 TELEMETRY_VERSION = "0.3.9"
 TELEMETRY_PIPS = ("sys", "eng", "wep")
+GAME_STATE_EVENTS = ("startup", "loadgame", "shutdown")
 
 
 # set up logging
@@ -205,6 +207,9 @@ def journal_entry(
             publish(this.settings.topic("state"), payload=json.dumps(new_state))
             this.current_state = state.copy()
 
+    if str(entry["event"]).lower() in GAME_STATE_EVENTS:
+        publish(topic=this.game_topic, payload=str(monitor.game_running()))
+
     if not this.settings.journal:
         return
 
@@ -292,6 +297,7 @@ def mqttCallback_on_connect(client, userdata, flags, rc):
     this.mqtt_connected = True
     status_message(message="Online", color="dark green")
     publish(topic=this.feed_topic, payload="True", retain=True)
+    publish(topic=this.game_topic, payload=str(monitor.game_running()))
 
 
 def mqttCallback_on_disconnect(client, userdata, rc):
