@@ -48,6 +48,8 @@ class Settings:
         "lowercase_topics": False,
         "topics": {
             "root": "Telemetry",
+            "gamerunning": "GameRunning",
+            "feedactive": "FeedActive",
             "dashboard": "Dashboard",
             "journal": "Journal",
             "location": "Location",

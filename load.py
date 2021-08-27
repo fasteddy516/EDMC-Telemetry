@@ -47,6 +47,12 @@ class Globals:
         self.current_state = {}
         self.settings = Settings(TELEMETRY_VERSION, logger)
         self.mqtt = mqtt_client.Client()
+        self.feed_topic = (
+            f"{self.settings.topic('root')}/{self.settings.topic('feedactive')}"
+        )
+        self.game_topic = (
+            f"{self.settings.topic('root')}/{self.settings.topic('gamerunning')}"
+        )
 
 
 this = Globals()
@@ -222,6 +228,7 @@ def connect_telemetry() -> None:
     this.mqtt.on_connect = mqttCallback_on_connect
     this.mqtt.on_disconnect = mqttCallback_on_disconnect
     this.mqtt.username_pw_set(this.settings.username, this.settings.password)
+    this.mqtt.will_set(topic=this.feed_topic, payload="False", qos=0, retain=True)
     try:
         if this.settings.encryption:
             ca_certs_arg = (
@@ -254,6 +261,8 @@ def disconnect_telemetry() -> None:
     """Break connection to the MQTT broker."""
     status_message(message="Disconnecting", color="steel blue")
     if this.mqtt_connected:
+        publish(topic=this.feed_topic, payload="False", retain=True)
+        time.sleep(0.5)
         this.mqtt.disconnect()
         start = time.monotonic()
         while this.mqtt_connected:
@@ -264,12 +273,12 @@ def disconnect_telemetry() -> None:
     this.mqtt.loop_stop()
 
 
-def publish(topic: str, payload: str):
+def publish(topic: str, payload: str, retain: bool = False):
     """Publish the specified payload to the specified MQTT topic."""
     topic = f"{this.settings.topic('root')}/{topic}"
     if this.settings.lowercase_topics:
         topic = topic.lower()
-    this.mqtt.publish(topic, payload=payload, qos=this.settings.qos, retain=False)
+    this.mqtt.publish(topic, payload=payload, qos=this.settings.qos, retain=retain)
 
 
 def mqttCallback_on_connect(client, userdata, flags, rc):
@@ -282,6 +291,7 @@ def mqttCallback_on_connect(client, userdata, flags, rc):
         logger.info("Connected to MQTT Broker")
     this.mqtt_connected = True
     status_message(message="Online", color="dark green")
+    publish(topic=this.feed_topic, payload="True", retain=True)
 
 
 def mqttCallback_on_disconnect(client, userdata, rc):
