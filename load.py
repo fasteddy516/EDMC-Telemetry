@@ -120,6 +120,82 @@ def _update_status(event=None) -> None:
         this.status["foreground"] = this.status_color
 
 
+def publish(topic: str, payload: str, retain: bool = False):
+    """Publish the specified payload to the specified MQTT topic."""
+    topic = f"{this.settings.topic('root')}/{topic}"
+    if this.settings.lowercase_topics:
+        topic = topic.lower()
+    this.mqtt.publish(topic, payload=payload, qos=this.settings.qos, retain=retain)
+
+
+# --- New helper function for Flags/Flags2 ---
+def publish_flags(base_topic: str, value: int, flag_map: Dict[int, str]):
+    """Publish individual bits as separate MQTT topics."""
+    for bit, name in flag_map.items():
+        bit_set = 1 if (value & bit) else 0
+        publish(f"{base_topic}/{name}", str(bit_set))
+
+
+# Flag mappings
+FLAGS_MAP = {
+    1 << 0: "Docked",
+    1 << 1: "Landed",
+    1 << 2: "LandingGearDown",
+    1 << 3: "ShieldsUp",
+    1 << 4: "Supercruise",
+    1 << 5: "FlightAssistOff",
+    1 << 6: "HardpointsDeployed",
+    1 << 7: "InWing",
+    1 << 8: "LightsOn",
+    1 << 9: "CargoScoopDeployed",
+    1 << 10: "SilentRunning",
+    1 << 11: "ScoopingFuel",
+    1 << 12: "SrvHandbrake",
+    1 << 13: "SrvUsingTurretView",
+    1 << 14: "SrvTurretRetracted",
+    1 << 15: "SrvDriveAssist",
+    1 << 16: "FsdMassLocked",
+    1 << 17: "FsdCharging",
+    1 << 18: "FsdCooldown",
+    1 << 19: "LowFuel",
+    1 << 20: "OverHeating",
+    1 << 21: "HasLatLong",
+    1 << 22: "IsInDanger",
+    1 << 23: "BeingInterdicted",
+    1 << 24: "InMainShip",
+    1 << 25: "InFighter",
+    1 << 26: "InSRV",
+    1 << 27: "HudInAnalysisMode",
+    1 << 28: "NightVision",
+    1 << 29: "AltitudeFromAverageRadius",
+    1 << 30: "FsdJump",
+    1 << 31: "SrvHighBeam",
+}
+
+FLAGS2_MAP = {
+    1 << 0: "OnFoot",
+    1 << 1: "InTaxi",
+    1 << 2: "InMulticrew",
+    1 << 3: "OnFootInStation",
+    1 << 4: "OnFootOnPlanet",
+    1 << 5: "AimDownSight",
+    1 << 6: "LowOxygen",
+    1 << 7: "LowHealth",
+    1 << 8: "Cold",
+    1 << 9: "Hot",
+    1 << 10: "VeryCold",
+    1 << 11: "VeryHot",
+    1 << 12: "GlideMode",
+    1 << 13: "OnFootInHangar",
+    1 << 14: "OnFootSocialSpace",
+    1 << 15: "OnFootExterior",
+    1 << 16: "BreathableAtmosphere",
+    1 << 17: "TelepresenceMulticrew",
+    1 << 18: "PhysicalMulticrew",
+    1 << 19: "FsdHyperdriveCharging",
+}
+
+
 def dashboard_entry(cmdr: str, is_beta: bool, entry: Dict[str, Any]) -> None:
     """Publish dashboard status via MQTT."""
     if not this.settings.dashboard:
@@ -157,6 +233,13 @@ def dashboard_entry(cmdr: str, is_beta: bool, entry: Dict[str, Any]) -> None:
                             f"{topic}/{this.settings.topic(tank)}",
                             payload=str(entry[key][tank]),
                         )
+
+                # additional processing for Flags
+                elif key.lower() == "flags":
+                    publish_flags(topic, entry[key], FLAGS_MAP)
+
+                elif key.lower() == "flags2":
+                    publish_flags(topic, entry[key], FLAGS2_MAP)
 
                 # standard processing for most status updates
                 else:
@@ -278,14 +361,6 @@ def disconnect_telemetry() -> None:
                 logger.error("Timeout waiting for MQTT to disconnect.")
                 break
     this.mqtt.loop_stop()
-
-
-def publish(topic: str, payload: str, retain: bool = False):
-    """Publish the specified payload to the specified MQTT topic."""
-    topic = f"{this.settings.topic('root')}/{topic}"
-    if this.settings.lowercase_topics:
-        topic = topic.lower()
-    this.mqtt.publish(topic, payload=payload, qos=this.settings.qos, retain=retain)
 
 
 def mqttCallback_on_connect(client, userdata, flags, rc):
