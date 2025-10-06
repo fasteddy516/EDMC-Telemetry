@@ -24,7 +24,7 @@ import paho.mqtt.client as mqtt_client
 from settings import Settings
 
 # plugin constants
-TELEMETRY_VERSION = "0.3.9"
+TELEMETRY_VERSION = "0.5.0"
 TELEMETRY_PIPS = ("sys", "eng", "wep")
 GAME_STATE_EVENTS = ("startup", "loadgame", "shutdown")
 
